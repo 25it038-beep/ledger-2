@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ledger — Digital Identity System</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script id="clerk-script" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<!-- Auth gate: shown until Clerk confirms a signed-in session -->
+<div id="auth-gate" class="auth-gate">
+  <div class="auth-card">
+    <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
+    <div class="masthead-sub" style="margin-bottom:22px;">Sign in to open your archive</div>
+    <div id="clerk-sign-in"></div>
+    <div id="auth-setup-hint" class="auth-setup-hint" style="display:none;">
+      Clerk isn't configured yet on the server. Add <code>CLERK_PUBLISHABLE_KEY</code> and
+      <code>CLERK_SECRET_KEY</code> to your <code>.env</code> file, restart the server, and reload this page.
+    </div>
+  </div>
+</div>
+
+<div class="app-shell" id="app-shell" style="display:none;">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">L</div>
+      <div>
+        <div class="brand-name">Ledger</div>
+        <div class="brand-sub">AI Identity</div>
+      </div>
+      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+    </div>
+    <div class="sidebar-user" id="sidebar-user">
+      <img id="sidebar-avatar" class="sidebar-avatar" src="" alt="" />
+      <div>
+        <div id="sidebar-name" class="sidebar-name">—</div>
+        <div class="sidebar-email">—</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="sidebar-item active" data-tab="premium-dashboard">
+        <span class="icon">◈</span><span>Dashboard</span>
+      </a>
+      <a class="sidebar-item" data-tab="upload">
+        <span class="icon"></span><span>Ingest Documents</span>
+      </a>
+      <a class="sidebar-item" data-tab="dashboard">
+        <span class="icon"></span><span>Archive</span>
+      </a>
+      <a class="sidebar-item" data-tab="timeline">
+        <span class="icon"></span><span>Timeline</span>
+      </a>
+      <a class="sidebar-item" data-tab="graph">
+        <span class="icon"></span><span>Connections</span>
+      </a>
+      <a class="sidebar-item" data-tab="search">
+        <span class="icon"></span><span>Retrieve</span>
+      </a>
+      <a class="sidebar-item" data-tab="career">
+        <span class="icon"></span><span>Career Intelligence</span>
+      </a>
+      <a class="sidebar-item" data-tab="news">
+        <span class="icon"></span><span>Tech Today</span>
+      </a>
+      <a class="sidebar-item" data-tab="identity">
+        <span class="icon"></span><span>My Identity</span>
+      </a>
+    </nav>
+  </aside>
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu" id="mobile-menu">☰</button>
+        <h1 class="page-title" id="page-title">Dashboard</h1>
+        <nav class="breadcrumbs" id="breadcrumbs"></nav>
+      </div>
+      <div class="topbar-right">
+        <div class="search-box">
+          <input type="text" id="global-search" placeholder="Search identity..." />
+        </div>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">Theme</button>
+        <button class="icon-btn" aria-label="Notifications">Alerts</button>
+        <div class="user-mini" id="topbar-user">
+          <img id="topbar-avatar" src="" alt="" />
+          <span id="topbar-name"></span>
+        </div>
+      </div>
+    </header>
+
+  <header class="masthead">
+    <div>
+      <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
+      <div class="masthead-sub">AI Digital Identity System — one archive, every credential connected</div>
+    </div>
+    <div class="header-right">
+      <div class="record-count"><b id="doc-total">0</b>documents on file</div>
+      <div class="user-badge" id="user-badge" style="display:none;">
+        <img id="user-avatar" class="user-avatar" src="" alt="" />
+        <div class="user-info">
+          <div id="user-name" class="user-name"></div>
+          <button id="sign-out-btn" class="sign-out-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="upload" class="active">01 · Ingest</button>
+    <button data-tab="dashboard">02 · Archive</button>
+    <button data-tab="timeline">03 · Timeline</button>
+    <button data-tab="graph">04 · Connections</button>
+    <button data-tab="search">05 · Retrieve</button>
+    <button data-tab="career">06 · Career</button>
+    <button data-tab="news">07 · World Tech News</button>
+    <button data-tab="identity">08 · My Identity</button>
+    <button data-tab="premium-dashboard">09 · Dashboard</button>
+  </nav>
+
+  <!-- MODULE 1: INGESTION -->
+  <section id="tab-upload" class="panel active">
+    <div class="upload-grid">
+      <div class="card">
+        <label class="field-label">Upload a file</label>
+        <div class="dropzone" id="dropzone">
+          <div class="glyph">&#8628;</div>
+          <div>Drop a certificate, resume, report, or letter here — or click to browse</div>
+          <div class="hint">PDF · DOCX · TXT — categorized and indexed automatically</div>
+        </div>
+        <input type="file" id="file-input" style="display:none" multiple />
+        <div class="field" style="margin-top:16px;">
+          <label class="field-label">Date on the document (optional — improves the timeline)</label>
+          <input type="text" id="upload-date" placeholder="e.g. 2024 or 2024-06" />
+        </div>
+        <div id="upload-log"></div>
+      </div>
+      <div class="card">
+        <label class="field-label">Or add a link (portfolio / GitHub)</label>
+        <div class="field" style="margin-top:10px;">
+          <input type="url" id="link-url" placeholder="https://github.com/you/project" />
+        </div>
+        <div class="field">
+          <label class="field-label">Label</label>
+          <input type="text" id="link-label" placeholder="e.g. AI/ML Project Portfolio" />
+        </div>
+        <div class="field">
+          <label class="field-label">Year</label>
+          <input type="text" id="link-date" placeholder="2026" />
+        </div>
+        <button class="primary" id="link-submit">Add link</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 2: CATEGORIZED ARCHIVE -->
+  <section id="tab-dashboard" class="panel">
+    <div class="category-strip" id="category-strip"></div>
+    <div class="doc-grid" id="doc-grid"></div>
+  </section>
+
+  <!-- MODULE 4: TIMELINE -->
+  <section id="tab-timeline" class="panel">
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <!-- MODULE 3: RELATIONSHIP GRAPH -->
+  <section id="tab-graph" class="panel">
+    <canvas id="graph-canvas"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:#d9a441"></span>Document</span>
+      <span><span class="dot" style="background:#5b8cff"></span>Skill</span>
+    </div>
+  </section>
+
+  <!-- MODULE 5: SMART RETRIEVAL -->
+  <section id="tab-search" class="panel">
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Show my AI projects… show all certificates… latest resume…" />
+      <button class="primary" id="search-btn">Search</button>
+    </div>
+    <div id="search-results" class="card"></div>
+  </section>
+
+  <!-- CAREER INTELLIGENCE ENGINE -->
+  <section id="tab-career" class="panel">
+    <div class="career-toolbar">
+      <button class="primary" id="career-run-btn">Run career analysis</button>
+      <span id="career-meta" class="career-meta"></span>
+    </div>
+    <div id="career-empty" class="empty-state">No career analysis yet — click "Run career analysis" above. This calls your configured LLM to read your whole archive and generate real, personalized guidance (requires ANTHROPIC_API_KEY to be set on the server).</div>
+    <div id="career-content" style="display:none;">
+
+      <div class="card career-score-card">
+        <div class="score-block">
+          <div class="score-num" id="score-readiness">--</div>
+          <div class="score-label">Career Readiness</div>
+        </div>
+        <div class="score-block">
+          <div class="score-num" id="score-resume">--</div>
+          <div class="score-label">Resume (ATS)</div>
+        </div>
+        <div class="score-block">
+          <div class="score-num" id="score-portfolio">--</div>
+          <div class="score-label">Portfolio</div>
+        </div>
+      </div>
+
+      <h3 class="section-head">Career Matches</h3>
+      <div id="career-matches" class="career-matches"></div>
+
+      <h3 class="section-head">Skill Gap</h3>
+      <div class="card" id="skill-gap"></div>
+
+      <h3 class="section-head">Resume Review</h3>
+      <div class="card" id="resume-review"></div>
+
+      <h3 class="section-head">Future Timeline</h3>
+      <div class="timeline" id="career-timeline"></div>
+
+      <h3 class="section-head">AI Insights</h3>
+      <div class="card" id="career-insights"></div>
+
+      <h3 class="section-head">Match a Job Description</h3>
+      <div class="card">
+        <textarea id="job-desc-input" placeholder="Paste a job description here…" rows="5"></textarea>
+        <button class="primary" id="job-match-btn" style="margin-top:10px;">Check match</button>
+        <div id="job-match-result" style="margin-top:16px;"></div>
+      </div>
+
+      <h3 class="section-head">Career Copilot</h3>
+      <div class="card">
+        <div id="copilot-log" class="copilot-log"></div>
+        <div class="search-bar" style="margin-top:12px;">
+          <input type="text" id="copilot-input" placeholder="What career suits me best? What should I learn next?" />
+          <button class="primary" id="copilot-send">Ask</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- WORLD TECH NEWS -->
+  <section id="tab-news" class="panel">
+    <div class="news-header">
+      <div class="news-header-top">
+        <span class="live-indicator"><span class="live-dot"></span>LIVE</span>
+        <h2>Tech Today</h2>
+        <span id="news-total" class="news-total">0 articles</span>
+      </div>
+      <div class="news-sub">Live intelligence from the rapidly evolving technology world</div>
+      <div class="news-meta">
+        <span id="news-last-updated" class="news-meta-item">Updated —</span>
+        <span id="news-auto-status" class="news-meta-item">Auto-refresh ON</span>
+        <button class="primary" id="news-refresh-btn"><span class="refresh-spinner" id="news-refresh-spinner" style="display:none;">⟳</span> Refresh</button>
+      </div>
+    </div>
+
+    <div id="news-featured" class="card news-featured" style="display:none;">
+      <div id="news-featured-content"></div>
+    </div>
+
+    <div class="card news-controls">
+      <div class="search-bar">
+        <input type="text" id="news-search" placeholder="Search tech news e.g. Machine Learning, Cybersecurity…" />
+        <button class="primary" id="news-search-clear" style="display:none;">Clear</button>
+        <button class="primary" id="news-search-btn">Search</button>
+        <span id="news-results-count" class="news-meta-item" style="margin-left:8px;"></span>
+      </div>
+      <div class="category-strip" id="news-categories">
+        <button class="category-chip active" data-cat="All">All</button>
+        <button class="category-chip" data-cat="AI">AI</button>
+        <button class="category-chip" data-cat="ML">Machine Learning</button>
+        <button class="category-chip" data-cat="Cybersecurity">Cybersecurity</button>
+        <button class="category-chip" data-cat="Programming">Programming</button>
+        <button class="category-chip" data-cat="Cloud">Cloud</button>
+        <button class="category-chip" data-cat="Robotics">Robotics</button>
+        <button class="category-chip" data-cat="Space">Space</button>
+        <button class="category-chip" data-cat="Semiconductor">Semiconductors</button>
+        <button class="category-chip" data-cat="Emerging Technologies">Emerging Technologies</button>
+      </div>
+    </div>
+
+    <div id="news-new-tech" class="card" style="display:none;">
+      <h3>New Technologies & Innovations</h3>
+      <div id="news-new-tech-content"></div>
+    </div>
+
+    <div id="news-personalized" class="card news-personalized" style="display:none;">
+      <h3>Recommended for You</h3>
+      <div id="news-personalized-content"></div>
+    </div>
+
+    <div id="news-evolution" class="card" style="display:none;">
+      <h3>Latest Technology Developments</h3>
+      <div id="news-evolution-content"></div>
+    </div>
+
+    <div id="news-status" class="empty-state" style="display:none;"></div>
+    <div id="news-grid" class="doc-grid"></div>
+    <div class="news-footer">
+      <div>Sources: TechCrunch, Ars Technica, The Verge, and other configured feeds</div>
+      <div>Articles link to their original publishers · Last synchronized: <span id="news-last-synced">—</span></div>
+    </div>
+  </section>
+
+  <!-- MY IDENTITY DASHBOARD -->
+  <section id="tab-identity" class="panel">
+    <h2 class="section-head">My Identity</h2>
+    <div id="identity-summary" class="card"></div>
+    <div class="identity-stats" id="identity-stats"></div>
+    <h3 class="section-head">Education</h3>
+    <div id="identity-education" class="doc-grid"></div>
+    <h3 class="section-head">Skills</h3>
+    <div id="identity-skills" class="card"></div>
+    <h3 class="section-head">Skill Evidence</h3>
+    <div id="identity-skill-evidence"></div>
+    <h3 class="section-head">Projects</h3>
+    <div id="identity-projects" class="doc-grid"></div>
+    <h3 class="section-head">Certifications</h3>
+    <div id="identity-certifications" class="doc-grid"></div>
+    <h3 class="section-head">Internships</h3>
+    <div id="identity-internships" class="doc-grid"></div>
+    <h3 class="section-head">Achievements</h3>
+    <div id="identity-achievements" class="doc-grid"></div>
+    <h3 class="section-head">Identity Connections</h3>
+    <div id="identity-connections" class="card"></div>
+  </section>
+
+  <!-- PREMIUM DASHBOARD -->
+  <section id="tab-premium-dashboard" class="panel">
+    <div class="dash-header glass shimmer">
+      <h1 id="dash-greeting" class="gradient-text">Good morning</h1>
+      <p class="masthead-sub">Your digital identity, skills, achievements, and technology intelligence in one place.</p>
+      <div class="dash-actions">
+        <input type="text" id="dash-search" placeholder="Global search..." />
+        <button class="primary" id="dash-refresh">Refresh</button>
+        <span id="dash-updated">Last updated —</span>
+      </div>
+    </div>
+
+    <div id="dash-stats" class="stats-grid"></div>
+
+    <div class="dash-grid">
+      <div class="card">
+        <h3 class="section-head">Digital Identity Overview</h3>
+        <div id="dash-identity-overview"></div>
+      </div>
+      <div class="card">
+        <h3 class="section-head">Skills Intelligence</h3>
+        <div id="dash-skills"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Document & Activity Timeline</h3>
+      <div id="dash-timeline"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Knowledge Network Preview</h3>
+      <div id="dash-graph"></div>
+      <button class="primary" id="dash-view-graph">View Full Graph</button>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Career Intelligence</h3>
+      <div id="dash-insights"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Tech Today</h3>
+      <div class="news-controls">
+        <input type="text" id="dash-news-search" placeholder="Search tech news..." />
+        <div class="category-strip" id="dash-news-cats"></div>
+        <button class="primary" id="dash-news-refresh">Refresh News</button>
+        <span id="dash-news-updated"></span>
+      </div>
+      <div id="dash-news-personalized"></div>
+      <div id="dash-news-grid" class="doc-grid"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Quick Actions</h3>
+      <div id="dash-quick-actions" class="quick-actions"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Recent Documents</h3>
+      <div id="dash-recent-docs" class="doc-grid"></div>
+    </div>
+  </section>
+
+  <!-- AI Widget Floating -->
+  <div id="ai-widget" class="ai-widget">
+    <button id="ai-widget-toggle" class="ai-widget-btn" title="AI Assistant">AI</button>
+    <div id="ai-widget-panel" class="ai-widget-panel">
+      <div class="ai-widget-header">
+        <span>AI Assistant</span>
+        <button id="ai-widget-close" class="ai-widget-close">X</button>
+      </div>
+      <div id="ai-widget-log" class="ai-widget-log copilot-log"></div>
+      <div class="search-bar ai-widget-input">
+        <input type="text" id="ai-widget-input" placeholder="Ask about your identity, news, career…" />
+        <button class="primary" id="ai-widget-send">Ask</button>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

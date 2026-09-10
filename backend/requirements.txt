@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+gunicorn
+sqlalchemy
+python-multipart
+pypdf
+python-docx
+scikit-learn
+numpy
+requests
+python-dotenv
+pyjwt[crypto]
