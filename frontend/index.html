@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Ledger — AI-Powered Digital Identity Intelligence Platform" />
+<meta name="theme-color" content="#0B0E13" />
+<title>Ledger — Digital Identity Intelligence</title>
+<link rel="stylesheet" href="style.css?v=2026_resume_creator" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script id="clerk-script" crossorigin="anonymous"></script>
+</head>
+<body>
+<a href="#page-title" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;">Skip to content</a>
+
+<!-- Auth gate: shown only if Clerk confirms authentication is required -->
+<div id="auth-gate" class="auth-gate" style="display:none;">
+  <div class="auth-card">
+    <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
+    <div class="masthead-sub" style="margin-bottom:22px;">Sign in to open your archive</div>
+    <div id="clerk-sign-in"></div>
+    <div id="auth-setup-hint" class="auth-setup-hint" style="display:none;">
+      Clerk isn't configured yet on the server. Add <code>CLERK_PUBLISHABLE_KEY</code> and
+      <code>CLERK_SECRET_KEY</code> to your <code>.env</code> file, restart the server, and reload this page.
+    </div>
+  </div>
+</div>
+
+<div class="app-shell" id="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">L</div>
+      <div>
+        <div class="brand-name">Ledger</div>
+        <div class="brand-sub">AI Identity</div>
+      </div>
+      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+    </div>
+    <div class="sidebar-user" id="sidebar-user">
+      <img id="sidebar-avatar" class="sidebar-avatar" src="" alt="" />
+      <div>
+        <div id="sidebar-name" class="sidebar-name">—</div>
+        <div class="sidebar-email">—</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav" role="navigation" aria-label="Primary">
+      <a class="sidebar-item active" data-tab="premium-dashboard" role="button" tabindex="0" aria-current="page">
+        <span class="icon" aria-hidden="true">◈</span><span>Dashboard</span>
+      </a>
+      <a class="sidebar-item" data-tab="upload">
+        <span class="icon"></span><span>Ingest Documents</span>
+      </a>
+      <a class="sidebar-item" data-tab="dashboard">
+        <span class="icon"></span><span>Archive</span>
+      </a>
+      <a class="sidebar-item" data-tab="timeline">
+        <span class="icon"></span><span>Timeline</span>
+      </a>
+      <a class="sidebar-item" data-tab="graph">
+        <span class="icon"></span><span>Connections</span>
+      </a>
+      <a class="sidebar-item" data-tab="search">
+        <span class="icon"></span><span>Retrieve</span>
+      </a>
+      <a class="sidebar-item" data-tab="career">
+        <span class="icon"></span><span>Career Intelligence</span>
+      </a>
+      <a class="sidebar-item" data-tab="news">
+        <span class="icon"></span><span>Tech Today</span>
+      </a>
+      <a class="sidebar-item" data-tab="identity">
+        <span class="icon"></span><span>My Identity</span>
+      </a>
+      <a class="sidebar-item" data-tab="hackathons">
+        <span class="icon"></span><span>Hackathon Finder</span>
+      </a>
+      <a class="sidebar-item" data-tab="resume">
+        <span class="icon">📄</span><span>Resume Creator</span>
+      </a>
+    </nav>
+  </aside>
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu" id="mobile-menu">☰</button>
+        <h1 class="page-title" id="page-title">Dashboard</h1>
+        <nav class="breadcrumbs" id="breadcrumbs"></nav>
+      </div>
+      <div class="topbar-right">
+        <div class="search-box">
+          <input type="text" id="global-search" placeholder="Search identity..." />
+        </div>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">Theme</button>
+        <button class="icon-btn" aria-label="Notifications">Alerts</button>
+        <div class="user-mini" id="topbar-user">
+          <img id="topbar-avatar" src="" alt="" />
+          <span id="topbar-name"></span>
+        </div>
+      </div>
+    </header>
+
+  <header class="masthead">
+    <div>
+      <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
+      <div class="masthead-sub">AI Digital Identity System — one archive, every credential connected</div>
+    </div>
+    <div class="header-right">
+      <div class="record-count"><b id="doc-total">0</b>documents on file</div>
+      <div class="user-badge" id="user-badge" style="display:none;">
+        <img id="user-avatar" class="user-avatar" src="" alt="" />
+        <div class="user-info">
+          <div id="user-name" class="user-name"></div>
+          <button id="sign-out-btn" class="sign-out-btn">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="upload" class="active">01 · Ingest</button>
+    <button data-tab="dashboard">02 · Archive</button>
+    <button data-tab="timeline">03 · Timeline</button>
+    <button data-tab="graph">04 · Connections</button>
+    <button data-tab="search">05 · Retrieve</button>
+    <button data-tab="career">06 · Career</button>
+    <button data-tab="news">07 · World Tech News</button>
+    <button data-tab="identity">08 · My Identity</button>
+    <button data-tab="premium-dashboard">09 · Dashboard</button>
+    <button data-tab="hackathons">10 · Hackathon Finder</button>
+    <button data-tab="resume">11 · Resume Creator</button>
+  </nav>
+
+
+  <!-- MODULE 1: INGESTION -->
+  <section id="tab-upload" class="panel active">
+    <div class="upload-grid">
+      <div class="card">
+        <label class="field-label">Upload a file</label>
+        <div class="dropzone" id="dropzone">
+          <div class="glyph">&#8628;</div>
+          <div>Drop a certificate, resume, report, or letter here — or click to browse</div>
+          <div class="hint">PDF · DOCX · TXT — categorized and indexed automatically</div>
+        </div>
+        <input type="file" id="file-input" style="display:none" multiple />
+        <div class="field" style="margin-top:16px;">
+          <label class="field-label">Date on the document (optional — improves the timeline)</label>
+          <input type="text" id="upload-date" placeholder="e.g. 2024 or 2024-06" />
+        </div>
+        <div id="upload-log"></div>
+      </div>
+      <div class="card">
+        <label class="field-label">Or add a link (portfolio / GitHub)</label>
+        <div class="field" style="margin-top:10px;">
+          <input type="url" id="link-url" placeholder="https://github.com/you/project" />
+        </div>
+        <div class="field">
+          <label class="field-label">Label</label>
+          <input type="text" id="link-label" placeholder="e.g. AI/ML Project Portfolio" />
+        </div>
+        <div class="field">
+          <label class="field-label">Year</label>
+          <input type="text" id="link-date" placeholder="2026" />
+        </div>
+        <button class="primary" id="link-submit">Add link</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 2: CATEGORIZED ARCHIVE -->
+  <section id="tab-dashboard" class="panel">
+    <div class="category-strip" id="category-strip"></div>
+    <div class="doc-grid" id="doc-grid"></div>
+  </section>
+
+  <!-- MODULE 4: TIMELINE -->
+  <section id="tab-timeline" class="panel">
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <!-- MODULE 3: RELATIONSHIP GRAPH -->
+  <section id="tab-graph" class="panel">
+    <canvas id="graph-canvas"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:#d9a441"></span>Document</span>
+      <span><span class="dot" style="background:#5b8cff"></span>Skill</span>
+    </div>
+  </section>
+
+  <!-- MODULE 5: SMART RETRIEVAL -->
+  <section id="tab-search" class="panel">
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Show my AI projects… show all certificates… latest resume…" />
+      <button class="primary" id="search-btn">Search</button>
+    </div>
+    <div id="search-results" class="card"></div>
+  </section>
+
+  <!-- CAREER INTELLIGENCE ENGINE -->
+  <section id="tab-career" class="panel">
+    <div class="career-toolbar">
+      <button class="primary" id="career-run-btn">Run career analysis</button>
+      <span id="career-meta" class="career-meta"></span>
+    </div>
+    <div id="career-empty" class="empty-state">No career analysis yet — click "Run career analysis" above. This calls NVIDIA AI (Meta LLaMA 3.2) to analyze your archive and generate personalized career intelligence.</div>
+    <div id="career-content" style="display:none;">
+
+      <div class="card career-score-card">
+        <div class="score-block">
+          <div class="score-num" id="score-readiness">--</div>
+          <div class="score-label">Career Readiness</div>
+        </div>
+        <div class="score-block">
+          <div class="score-num" id="score-resume">--</div>
+          <div class="score-label">Resume (ATS)</div>
+        </div>
+        <div class="score-block">
+          <div class="score-num" id="score-portfolio">--</div>
+          <div class="score-label">Portfolio</div>
+        </div>
+      </div>
+
+      <h3 class="section-head">Career Matches</h3>
+      <div id="career-matches" class="career-matches"></div>
+
+      <h3 class="section-head">Skill Gap</h3>
+      <div class="card" id="skill-gap"></div>
+
+      <h3 class="section-head">Resume Review</h3>
+      <div class="card" id="resume-review"></div>
+
+      <h3 class="section-head">Future Timeline</h3>
+      <div class="timeline" id="career-timeline"></div>
+
+      <h3 class="section-head">AI Insights</h3>
+      <div class="card" id="career-insights"></div>
+
+      <h3 class="section-head">Match a Job Description</h3>
+      <div class="card">
+        <textarea id="job-desc-input" placeholder="Paste a job description here…" rows="5"></textarea>
+        <button class="primary" id="job-match-btn" style="margin-top:10px;">Check match</button>
+        <div id="job-match-result" style="margin-top:16px;"></div>
+      </div>
+
+      <h3 class="section-head">Career Copilot</h3>
+      <div class="card">
+        <div id="copilot-log" class="copilot-log"></div>
+        <div class="search-bar" style="margin-top:12px;">
+          <input type="text" id="copilot-input" placeholder="What career suits me best? What should I learn next?" />
+          <button class="primary" id="copilot-send">Ask</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- WORLD TECH NEWS -->
+  <section id="tab-news" class="panel">
+    <div class="news-header">
+      <div class="news-header-top">
+        <span class="live-indicator"><span class="live-dot"></span>LIVE</span>
+        <h2>Tech Today</h2>
+        <span id="news-total" class="news-total">0 articles</span>
+      </div>
+      <div class="news-sub">Live intelligence from the rapidly evolving technology world</div>
+      <div class="news-meta">
+        <span id="news-last-updated" class="news-meta-item">Updated —</span>
+        <span id="news-auto-status" class="news-meta-item">Auto-refresh ON</span>
+        <button class="primary" id="news-refresh-btn"><span class="refresh-spinner" id="news-refresh-spinner" style="display:none;">⟳</span> Refresh</button>
+      </div>
+    </div>
+
+    <div id="news-featured" class="card news-featured" style="display:none;">
+      <div id="news-featured-content"></div>
+    </div>
+
+    <div class="card news-controls">
+      <div class="search-bar">
+        <input type="text" id="news-search" placeholder="Search tech news e.g. Machine Learning, Cybersecurity…" />
+        <button class="primary" id="news-search-clear" style="display:none;">Clear</button>
+        <button class="primary" id="news-search-btn">Search</button>
+        <span id="news-results-count" class="news-meta-item" style="margin-left:8px;"></span>
+      </div>
+      <div class="category-strip" id="news-categories">
+        <button class="category-chip active" data-cat="All">All</button>
+        <button class="category-chip" data-cat="AI">AI</button>
+        <button class="category-chip" data-cat="ML">Machine Learning</button>
+        <button class="category-chip" data-cat="Cybersecurity">Cybersecurity</button>
+        <button class="category-chip" data-cat="Programming">Programming</button>
+        <button class="category-chip" data-cat="Cloud">Cloud</button>
+        <button class="category-chip" data-cat="Robotics">Robotics</button>
+        <button class="category-chip" data-cat="Space">Space</button>
+        <button class="category-chip" data-cat="Semiconductor">Semiconductors</button>
+        <button class="category-chip" data-cat="Emerging Technologies">Emerging Technologies</button>
+      </div>
+    </div>
+
+    <div id="news-new-tech" class="card" style="display:none;">
+      <h3>New Technologies & Innovations</h3>
+      <div id="news-new-tech-content"></div>
+    </div>
+
+    <div id="news-personalized" class="card news-personalized" style="display:none;">
+      <h3>Recommended for You</h3>
+      <div id="news-personalized-content"></div>
+    </div>
+
+    <div id="news-evolution" class="card" style="display:none;">
+      <h3>Latest Technology Developments</h3>
+      <div id="news-evolution-content"></div>
+    </div>
+
+    <div id="news-status" class="empty-state" style="display:none;"></div>
+    <div id="news-grid" class="doc-grid"></div>
+    <div class="news-footer">
+      <div>Sources: TechCrunch, Ars Technica, The Verge, and other configured feeds</div>
+      <div>Articles link to their original publishers · Last synchronized: <span id="news-last-synced">—</span></div>
+    </div>
+  </section>
+
+  <!-- MY IDENTITY DASHBOARD -->
+  <section id="tab-identity" class="panel">
+    <h2 class="section-head">My Identity</h2>
+    <div id="identity-summary" class="card"></div>
+    <div class="identity-stats" id="identity-stats"></div>
+    <h3 class="section-head">Education</h3>
+    <div id="identity-education" class="doc-grid"></div>
+    <h3 class="section-head">Skills</h3>
+    <div id="identity-skills" class="card"></div>
+    <h3 class="section-head">Skill Evidence</h3>
+    <div id="identity-skill-evidence"></div>
+    <h3 class="section-head">Projects</h3>
+    <div id="identity-projects" class="doc-grid"></div>
+    <h3 class="section-head">Certifications</h3>
+    <div id="identity-certifications" class="doc-grid"></div>
+    <h3 class="section-head">Internships</h3>
+    <div id="identity-internships" class="doc-grid"></div>
+    <h3 class="section-head">Achievements</h3>
+    <div id="identity-achievements" class="doc-grid"></div>
+    <h3 class="section-head">Identity Connections</h3>
+    <div id="identity-connections" class="card"></div>
+  </section>
+
+  <!-- PREMIUM DASHBOARD -->
+  <section id="tab-premium-dashboard" class="panel">
+    <div class="dash-header glass shimmer">
+      <h1 id="dash-greeting" class="gradient-text">Good morning</h1>
+      <p class="masthead-sub">Your digital identity, skills, achievements, and technology intelligence in one place.</p>
+      <div class="dash-actions">
+        <input type="text" id="dash-search" placeholder="Global search..." />
+        <button class="primary" id="dash-refresh">Refresh</button>
+        <span id="dash-updated">Last updated —</span>
+      </div>
+    </div>
+
+    <div id="dash-stats" class="stats-grid"></div>
+
+    <div class="dash-grid">
+      <div class="card">
+        <h3 class="section-head">Digital Identity Overview</h3>
+        <div id="dash-identity-overview"></div>
+      </div>
+      <div class="card">
+        <h3 class="section-head">Skills Intelligence</h3>
+        <div id="dash-skills"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Document & Activity Timeline</h3>
+      <div id="dash-timeline"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Knowledge Network Preview</h3>
+      <div id="dash-graph"></div>
+      <button class="primary" id="dash-view-graph">View Full Graph</button>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Career Intelligence</h3>
+      <div id="dash-insights"></div>
+    </div>
+
+    <div class="card dash-hackathons-section">
+      <div class="dash-section-header">
+        <div>
+          <h3 class="section-head" style="margin-bottom:2px;">🚀 Hackathon Finder</h3>
+          <p class="section-sub">Discover upcoming hackathons matched to your skills and projects.</p>
+        </div>
+        <div class="dash-section-actions">
+          <span class="live-indicator"><span class="live-dot"></span>LIVE DATA</span>
+          <button class="primary small-btn" id="dash-hackathons-view-all">View All Hackathons &rarr;</button>
+        </div>
+      </div>
+      <div id="dash-hackathons-recommended" class="hackathons-grid"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Tech Today</h3>
+      <div class="news-controls">
+        <input type="text" id="dash-news-search" placeholder="Search tech news..." />
+        <div class="category-strip" id="dash-news-cats"></div>
+        <button class="primary" id="dash-news-refresh">Refresh News</button>
+        <span id="dash-news-updated"></span>
+      </div>
+      <div id="dash-news-personalized"></div>
+      <div id="dash-news-grid" class="doc-grid"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Quick Actions</h3>
+      <div id="dash-quick-actions" class="quick-actions"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-head">Recent Documents</h3>
+      <div id="dash-recent-docs" class="doc-grid"></div>
+    </div>
+  </section>
+
+  <!-- HACKATHON FINDER EXPLORER -->
+  <section id="tab-hackathons" class="panel">
+    <div class="hackathon-header">
+      <div class="hackathon-header-top">
+        <div class="header-badge-title">
+          <span class="live-indicator"><span class="live-dot"></span>LIVE DATA</span>
+          <h2>🚀 Hackathon Finder</h2>
+        </div>
+        <div class="hackathon-meta">
+          <span id="hackathon-last-updated" class="news-meta-item">Updated —</span>
+          <button class="primary" id="hackathon-refresh-btn"><span class="refresh-spinner" id="hackathon-refresh-spinner" style="display:none;">⟳</span> Refresh</button>
+        </div>
+      </div>
+      <div class="hackathon-sub">Discover worldwide and virtual hackathons matched directly to your verified skills, projects, and credentials.</div>
+    </div>
+
+    <!-- Featured Best Match Hero Card -->
+    <div id="hackathon-best-match" class="hackathon-best-match-wrapper"></div>
+
+    <!-- Filter & Search Controls -->
+    <div class="card hackathon-controls">
+      <div class="search-bar">
+        <input type="text" id="hackathon-search-input" placeholder="Search hackathons by title, organizer, skills, technologies (e.g. AI, Python, AWS)..." />
+        <button class="primary" id="hackathon-search-btn">Search</button>
+      </div>
+
+      <div class="hackathon-filter-row">
+        <div class="filter-group">
+          <span class="filter-label">Mode:</span>
+          <div class="filter-buttons" id="hackathon-mode-filters">
+            <button class="category-chip active" data-mode="All">All</button>
+            <button class="category-chip" data-mode="Online">Online</button>
+            <button class="category-chip" data-mode="Offline">In-Person</button>
+            <button class="category-chip" data-mode="Hybrid">Hybrid</button>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <span class="filter-label">Sort by:</span>
+          <select id="hackathon-sort-select" class="filter-select">
+            <option value="best_match">Best Match</option>
+            <option value="closest_deadline">Closest Deadline</option>
+            <option value="start_date">Start Date</option>
+            <option value="prize">Prize Pool</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <span class="filter-label">Country/Region:</span>
+          <select id="hackathon-country-select" class="filter-select">
+            <option value="All">All Regions</option>
+            <option value="Global">Global / Online</option>
+            <option value="India">India</option>
+            <option value="United States">United States</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Categories & Technologies Strip -->
+      <div class="category-strip" id="hackathon-cat-chips">
+        <button class="category-chip active" data-cat="All">All Categories</button>
+        <button class="category-chip" data-cat="AI">AI & Machine Learning</button>
+        <button class="category-chip" data-cat="Python">Python</button>
+        <button class="category-chip" data-cat="Cybersecurity">Cybersecurity</button>
+        <button class="category-chip" data-cat="Web3">Web3 & Blockchain</button>
+        <button class="category-chip" data-cat="Cloud">Cloud & DevOps</button>
+        <button class="category-chip" data-cat="Mobile">Mobile & Apps</button>
+        <button class="category-chip" data-cat="Design">Design & Gaming</button>
+      </div>
+    </div>
+
+    <div class="results-meta-bar">
+      <span id="hackathon-results-count" class="results-count">Loading hackathons...</span>
+    </div>
+
+    <!-- Hackathons Grid -->
+    <div id="hackathon-grid" class="hackathons-grid"></div>
+  </section>
+
+  <!-- MODULE 11: RESUME CREATOR -->
+  <section id="tab-resume" class="panel">
+    <!-- Header Controls Toolbar -->
+    <div class="resume-toolbar-card">
+      <div class="resume-toolbar-left">
+        <div class="resume-control-group">
+          <label class="field-label" for="resume-target-select">Resume Target</label>
+          <select id="resume-target-select" class="resume-select"></select>
+        </div>
+        <div class="resume-control-group">
+          <label class="field-label" for="resume-template-select">Template Style</label>
+          <select id="resume-template-select" class="resume-select"></select>
+        </div>
+      </div>
+      <div class="resume-toolbar-actions">
+        <button class="primary resume-btn-pulse" id="resume-download-btn">
+          <span class="btn-icon">⬇</span> Download PDF
+        </button>
+        <button class="secondary" id="resume-save-btn">
+          <span class="btn-icon">💾</span> Save Draft
+        </button>
+        <button class="secondary" id="resume-refresh-btn" title="Re-sync with latest identity data">
+          <span class="btn-icon">🔄</span> Re-Sync
+        </button>
+        <button class="secondary" id="resume-analyze-btn">
+          <span class="btn-icon">📊</span> ATS Quality
+        </button>
+        <span id="resume-save-status" class="resume-save-status">Synced</span>
+      </div>
+    </div>
+
+    <!-- Main Split Layout -->
+    <div class="resume-split-container">
+      <!-- Left Column: Controls & Editor -->
+      <div class="resume-editor-col">
+
+        <!-- Skill Intelligence Panel -->
+        <div class="card resume-card" id="resume-skill-intel-panel">
+          <div class="card-header-flex">
+            <div>
+              <h3 class="section-head-sm">Skills detected from your Digital Identity</h3>
+              <div class="text-muted-xs">Evidence-based extraction from uploaded documents and credentials</div>
+            </div>
+            <span class="badge-accent" id="resume-total-skills-badge">0 Skills</span>
+          </div>
+          <div class="skill-intel-stats">
+            <div class="skill-intel-stat">
+              <span class="stat-num" id="intel-verified-count">0</span>
+              <span class="stat-lbl">Document Backed</span>
+            </div>
+            <div class="skill-intel-stat">
+              <span class="stat-num" id="intel-categories-count">0</span>
+              <span class="stat-lbl">Categories</span>
+            </div>
+            <div class="skill-intel-stat">
+              <span class="stat-num" id="intel-recent-count">0</span>
+              <span class="stat-lbl">Recently Detected</span>
+            </div>
+          </div>
+          <div class="skill-intel-evidence-box">
+            <div class="evidence-box-title">Document Evidence Breakdown</div>
+            <div id="resume-skill-evidence-list" class="skill-evidence-scroll"></div>
+          </div>
+        </div>
+
+        <!-- ATS Quality & Analysis Panel -->
+        <div class="card resume-card" id="resume-quality-panel">
+          <div class="card-header-flex">
+            <div>
+              <h3 class="section-head-sm">Resume Analysis & ATS Readiness</h3>
+              <div class="text-muted-xs">Algorithmic evaluation of parseability, action verbs, and quantifiable impact</div>
+            </div>
+            <div class="ats-score-pill" id="ats-score-pill">
+              <span id="ats-score-val">--</span> / 100
+              <span class="ats-grade" id="ats-grade-val">Analyzing</span>
+            </div>
+          </div>
+          <div id="resume-quality-checks" class="quality-checks-grid"></div>
+          <div id="resume-quality-suggestions" class="quality-suggestions-list"></div>
+        </div>
+
+        <!-- Accordion / Section Form Editors -->
+        <!-- 1. Personal Information -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-personal')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">👤</span>
+              <h4>Personal Information</h4>
+              <span class="evidence-badge evidence-badge-profile">✓ From profile & documents</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-personal">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-personal">
+            <div class="form-grid-2">
+              <div class="field">
+                <label class="field-label">Full Name</label>
+                <input type="text" id="res-name" placeholder="Harshan" />
+              </div>
+              <div class="field">
+                <label class="field-label">Email Address</label>
+                <input type="email" id="res-email" placeholder="harshan@example.com" />
+              </div>
+              <div class="field">
+                <label class="field-label">Phone</label>
+                <input type="text" id="res-phone" placeholder="+1 (555) 019-2834" />
+              </div>
+              <div class="field">
+                <label class="field-label">Location</label>
+                <input type="text" id="res-location" placeholder="City, Country" />
+              </div>
+              <div class="field">
+                <label class="field-label">LinkedIn URL</label>
+                <input type="url" id="res-linkedin" placeholder="https://linkedin.com/in/..." />
+              </div>
+              <div class="field">
+                <label class="field-label">GitHub URL</label>
+                <input type="url" id="res-github" placeholder="https://github.com/..." />
+              </div>
+              <div class="field" style="grid-column: 1 / -1;">
+                <label class="field-label">Portfolio / Website</label>
+                <input type="url" id="res-portfolio" placeholder="https://..." />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Professional Summary -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-summary')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">📝</span>
+              <h4>Professional Summary</h4>
+              <span class="evidence-badge evidence-badge-verified">✓ Grounded on verified data</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-summary">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-summary">
+            <div class="field">
+              <div class="field-row-between">
+                <label class="field-label">Concise Summary (Anti-Hallucinated)</label>
+                <button class="btn-link-xs" id="res-regen-summary-btn">Regenerate from Identity</button>
+              </div>
+              <textarea id="res-summary" rows="3" placeholder="Concise, verified summary based on actual projects and skills..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Education -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-education')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">🎓</span>
+              <h4>Education</h4>
+              <span class="evidence-badge evidence-badge-verified">✓ Extracted from academic docs</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-education">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-education">
+            <div id="res-education-list"></div>
+            <button class="secondary btn-sm" id="res-add-edu-btn" style="margin-top:8px;">+ Add Education</button>
+          </div>
+        </div>
+
+        <!-- 4. Technical Skills -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-skills')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">⚡</span>
+              <h4>Technical Skills (Categorized)</h4>
+              <span class="evidence-badge evidence-badge-verified">✓ Document verified</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-skills">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-skills">
+            <div class="text-muted-xs" style="margin-bottom:10px;">Only categories with actual verified skills are shown. You can add new skills or edit tags below.</div>
+            <div id="res-skills-categorized"></div>
+          </div>
+        </div>
+
+        <!-- 5. Projects -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-projects')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">🚀</span>
+              <h4>Projects</h4>
+              <span class="evidence-badge evidence-badge-verified">✓ Extracted from project reports</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-projects">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-projects">
+            <div id="res-projects-list"></div>
+            <button class="secondary btn-sm" id="res-add-project-btn" style="margin-top:8px;">+ Add Project</button>
+          </div>
+        </div>
+
+        <!-- 6. Experience & Internships -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-experience')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">💼</span>
+              <h4>Experience & Internships</h4>
+              <span class="evidence-badge evidence-badge-verified">✓ From offer letters & certificates</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-experience">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-experience">
+            <div id="res-experience-list"></div>
+            <button class="secondary btn-sm" id="res-add-exp-btn" style="margin-top:8px;">+ Add Experience</button>
+          </div>
+        </div>
+
+        <!-- 7. Certifications -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-certifications')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">📜</span>
+              <h4>Certifications</h4>
+              <span class="evidence-badge evidence-badge-verified">✓ Verified credentials</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-certifications">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-certifications">
+            <div id="res-certifications-list"></div>
+            <button class="secondary btn-sm" id="res-add-cert-btn" style="margin-top:8px;">+ Add Certification</button>
+          </div>
+        </div>
+
+        <!-- 8. Achievements -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-achievements')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">🏆</span>
+              <h4>Achievements & Awards</h4>
+              <span class="evidence-badge evidence-badge-verified">✓ Verified hackathons</span>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-achievements">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-achievements">
+            <div id="res-achievements-list"></div>
+            <button class="secondary btn-sm" id="res-add-ach-btn" style="margin-top:8px;">+ Add Achievement</button>
+          </div>
+        </div>
+
+        <!-- 9. Languages -->
+        <div class="card resume-card resume-section-card">
+          <div class="resume-section-header" onclick="toggleResumeSection('sec-languages')">
+            <div class="sec-title-wrap">
+              <span class="sec-icon">🌐</span>
+              <h4>Languages</h4>
+            </div>
+            <span class="accordion-arrow" id="sec-arrow-sec-languages">▼</span>
+          </div>
+          <div class="resume-section-body" id="sec-languages">
+            <div class="field">
+              <label class="field-label">Languages (comma-separated)</label>
+              <input type="text" id="res-languages-input" placeholder="English" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Live Resume Preview -->
+      <div class="resume-preview-col">
+        <div class="preview-sticky-wrap">
+          <div class="preview-toolbar">
+            <div class="preview-title-wrap">
+              <span class="preview-status-dot"></span>
+              <span class="preview-label">Live Resume Preview</span>
+              <span class="template-tag" id="preview-template-tag">Minimal Professional</span>
+            </div>
+            <div class="preview-zoom-actions">
+              <button class="icon-btn-xs" id="preview-zoom-out" title="Zoom Out">-</button>
+              <span id="preview-zoom-val">100%</span>
+              <button class="icon-btn-xs" id="preview-zoom-in" title="Zoom In">+</button>
+              <button class="primary btn-xs" id="preview-download-quick-btn">⬇ PDF</button>
+            </div>
+          </div>
+
+          <!-- A4 Canvas Paper Container -->
+          <div class="resume-viewport" id="resume-viewport">
+            <div class="resume-paper template-minimal_professional" id="resume-paper">
+              <!-- Content rendered reactively -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </div>
+</div>
+
+
+<!-- AI Widget Floating -->
+<div id="ai-widget" class="ai-widget">
+  <button id="ai-widget-toggle" class="ai-widget-btn" title="AI Assistant" aria-label="Open AI Assistant">AI</button>
+  <div id="ai-widget-panel" class="ai-widget-panel">
+    <div class="ai-widget-header">
+      <div class="ai-widget-header-title">
+        <span class="ai-indicator-dot"></span>
+        <span>AI Assistant</span>
+      </div>
+      <button id="ai-widget-close" class="ai-widget-close" aria-label="Close Assistant">✕</button>
+    </div>
+    <div id="ai-widget-log" class="ai-widget-log copilot-log"></div>
+    <div class="ai-widget-footer">
+      <input type="text" id="ai-widget-input" placeholder="Ask about your skills, news, career…" />
+      <button class="primary" id="ai-widget-send">Ask</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=2026_resume_creator"></script>
+</body>
+</html>
+
