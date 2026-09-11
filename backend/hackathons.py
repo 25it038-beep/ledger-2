@@ -376,6 +376,97 @@ class UnstopApiProvider(HackathonProvider):
         return results
 
 
+class WebSearchHackathonProvider(HackathonProvider):
+    """Fetches real hackathon announcements and events across the live web via Google RSS."""
+
+    def __init__(self, default_query: str = "hackathon 2026"):
+        self.default_query = default_query
+
+    def fetch_hackathons(self, query: Optional[str] = None) -> List[Dict[str, Any]]:
+        import xml.etree.ElementTree as ET
+        import urllib.parse
+        q = query or self.default_query
+        encoded_q = urllib.parse.quote_plus(f"{q} hackathon 2026")
+        url = f"https://news.google.com/rss/search?q={encoded_q}&hl=en-US&gl=US&ceid=US:en"
+
+        results = []
+        try:
+            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=8)
+            if resp.status_code != 200:
+                return results
+            root = ET.fromstring(resp.content)
+            items = root.findall(".//item")
+            seen = set()
+
+            for it in items:
+                raw_title = it.find("title").text if it.find("title") is not None else ""
+                link = it.find("link").text if it.find("link") is not None else ""
+                pub_date = it.find("pubDate").text if it.find("pubDate") is not None else ""
+                source_elem = it.find("source")
+                source_name = source_elem.text if source_elem is not None else "Web Announcement"
+
+                if not raw_title or not link:
+                    continue
+
+                title_lower = raw_title.lower()
+                # Ensure it is genuinely a hackathon
+                if "hackathon" not in title_lower and "hack" not in title_lower:
+                    continue
+
+                # Clean title: "Event Name - Publisher"
+                if " - " in raw_title:
+                    parts = raw_title.rsplit(" - ", 1)
+                    name = parts[0].strip()
+                    organizer = parts[1].strip() or source_name
+                else:
+                    name = raw_title.strip()
+                    organizer = source_name
+
+                if name.lower() in seen:
+                    continue
+                seen.add(name.lower())
+
+                # Technologies and categories extraction
+                tech_keywords = ["AI", "Python", "Machine Learning", "Quantum", "Cybersecurity", "Cloud", "Web3", "Blockchain", "Data", "Robotics", "Mobile", "Defence", "Health", "Docker", "AWS"]
+                technologies = [tk for tk in tech_keywords if tk.lower() in title_lower]
+                if not technologies:
+                    technologies = ["Software Engineering"]
+
+                cat_candidates = ["AI", "Cybersecurity", "Quantum", "Cloud", "Open Source", "GovTech", "Defence", "Health", "Web3"]
+                categories = [c for c in cat_candidates if c.lower() in title_lower]
+                if not categories:
+                    categories = ["Hackathon"]
+
+                formatted_date = _format_iso_date(pub_date) or "Upcoming 2026"
+
+                results.append({
+                    "id": f"web_{abs(hash(link))}",
+                    "name": name,
+                    "organizer": organizer,
+                    "description": f"Live web discovered event: {name}. Published by {organizer}.",
+                    "url": link,
+                    "official_url": link,
+                    "start_date": formatted_date,
+                    "end_date": "Not specified",
+                    "registration_deadline": "Check official website",
+                    "deadline_raw": None,
+                    "time_left_str": "Open / Ongoing",
+                    "location": "Global / Online / Host City",
+
+                    "country": "Global",
+                    "region": "Web Announcement",
+                    "mode": "Online" if "online" in title_lower or "virtual" in title_lower else ("Offline" if any(c in title_lower for c in ["amsterdam", "delaware", "boston", "india", "london", "paris", "nyc"]) else "Hybrid"),
+                    "categories": categories,
+                    "technologies": technologies,
+                    "prize": "See official event details",
+                    "source": f"Web ({organizer})",
+                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                })
+        except Exception as e:
+            print(f"[hackathons] WebSearchHackathonProvider fetch error: {e}")
+        return results
+
+
 def _format_iso_date(iso_str: Optional[str]) -> Optional[str]:
     dt = _parse_date_safe(iso_str)
     if not dt:
@@ -428,6 +519,7 @@ PROVIDERS: List[HackathonProvider] = [
     DevpostApiProvider(),
     DevfolioApiProvider(),
     UnstopApiProvider(),
+    WebSearchHackathonProvider(),
 ]
 
 
@@ -558,6 +650,20 @@ def calculate_match(hackathon: Dict[str, Any], user_ctx: Dict[str, Any]) -> Dict
 
     proj_score = min(1.0, len(proj_cat_matches) * 0.5) if proj_cat_matches else (0.3 if matched_skills else 0.1)
 
+    # 4. Live Web Research Trending Skills Today
+    trending_matches = []
+    trend_evidence = ""
+    try:
+        import skills_research
+        live_trends = skills_research.fetch_trending_skills_web()
+        for trend in live_trends:
+            if any(alias in haystack for alias in trend["aliases"]):
+                trending_matches.append(trend["name"])
+                if not trend_evidence:
+                    trend_evidence = trend.get("sample_headline", "")
+    except Exception:
+        pass
+
     # Composite score
     raw_score = (
         skill_score * MATCH_WEIGHTS["skills"]
@@ -573,6 +679,9 @@ def calculate_match(hackathon: Dict[str, Any], user_ctx: Dict[str, Any]) -> Dict
     else:
         final_pct = int(35 + raw_score * 25)
 
+    if trending_matches:
+        final_pct = min(98, final_pct + 4)
+
     final_pct = max(35, min(98, final_pct))
 
     # Explanation generation
@@ -586,12 +695,18 @@ def calculate_match(hackathon: Dict[str, Any], user_ctx: Dict[str, Any]) -> Dict
     else:
         why_parts.append(f"General upcoming hackathon in {hackathon.get('categories', ['technology'])[0]} to expand your credentials.")
 
+    if trending_matches:
+        why_parts.append(f"🔥 Features today's high-demand skill ({trending_matches[0]}) trending in live web research.")
+
     return {
         "match_score": final_pct,
         "matched_skills": matched_skills,
         "matched_technologies": matched_techs,
+        "trending_skills_today": trending_matches,
+        "is_trending_today": len(trending_matches) > 0,
         "why_relevant": " ".join(why_parts),
     }
+
 
 
 def get_recommended_hackathons(db: Session, limit: int = 5) -> List[Dict[str, Any]]:
@@ -634,9 +749,10 @@ def search_hackathons(
 
         # Filter category
         if category and category.lower() != "all":
-            cats_lower = [c.lower() for c in h.get("categories", [])]
-            if not any(category.lower() in c for c in cats_lower):
-                continue
+            if category.lower() not in ["trending", "trending_today"]:
+                cats_lower = [c.lower() for c in h.get("categories", [])]
+                if not any(category.lower() in c for c in cats_lower):
+                    continue
 
         # Filter country / region
         if country and country.lower() != "all":
@@ -661,7 +777,12 @@ def search_hackathons(
         h_copy = dict(h)
         match_info = calculate_match(h, user_ctx)
         h_copy.update(match_info)
+
+        if category and category.lower() in ["trending", "trending_today"] and not match_info.get("is_trending_today"):
+            continue
+
         results.append(h_copy)
+
 
     # Sorting
     if sort == "closest_deadline":
@@ -678,3 +799,20 @@ def search_hackathons(
         results.sort(key=lambda x: x.get("match_score", 0), reverse=True)
 
     return results[:limit]
+
+
+def web_search_hackathons_live(db: Session, query: str = "", limit: int = 30) -> List[Dict[str, Any]]:
+    """Perform on-demand live web search for hackathons matching any custom query."""
+    provider = WebSearchHackathonProvider(default_query=query or "AI technology")
+    raw_results = provider.fetch_hackathons(query=query)
+
+    user_ctx = get_user_identity_context(db)
+    scored_results = []
+    for h in raw_results:
+        _calculate_deadline_intel(h)
+        match_info = calculate_match(h, user_ctx)
+        h.update(match_info)
+        scored_results.append(h)
+
+    scored_results.sort(key=lambda x: x.get("match_score", 0), reverse=True)
+    return scored_results[:limit]

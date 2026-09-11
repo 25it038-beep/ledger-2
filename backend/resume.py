@@ -232,7 +232,7 @@ def _extract_name_and_contact(db: Session) -> Dict[str, Any]:
         "linkedin": linkedin or "",
         "github": github or "",
         "portfolio": portfolio or "",
-        "evidence": "✓ From profile & documents" if (name or email) else "✎ Manually entered"
+        "evidence": "Verified from profile and documents" if (name or email) else "Manually entered"
     }
 
 

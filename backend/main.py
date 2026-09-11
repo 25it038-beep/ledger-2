@@ -37,6 +37,7 @@ import llm
 import hackathons
 import resume
 import resume_pdf
+import skills_research
 
 
 app = FastAPI(title="AI Digital Identity System")
@@ -743,6 +744,44 @@ def refresh_hackathons(db: Session = Depends(get_db)):
         raise HTTPException(500, f"Refresh failed: {e}")
 
 
+@app.get("/api/hackathons/web-search")
+def web_search_hackathons_endpoint(q: str = "", limit: int = 30, db: Session = Depends(get_db)):
+    """Live on-demand web search for hackathons matching any custom query across Google indexes."""
+    try:
+        results = hackathons.web_search_hackathons_live(db=db, query=q, limit=limit)
+        return {
+            "hackathons": results,
+            "total": len(results),
+            "query": q,
+            "source_status": "ok",
+        }
+    except Exception as e:
+        return {
+            "hackathons": [],
+            "total": 0,
+            "query": q,
+            "source_status": "error",
+            "message": f"Web search failed: {str(e)}",
+        }
+
+
+@app.get("/api/skills/trending-today")
+def get_trending_skills_today_endpoint(db: Session = Depends(get_db)):
+    """Live web-researched trending tech skills and personal identity alignment."""
+    try:
+        data = skills_research.get_trending_skills_intelligence(db=db)
+        return data
+    except Exception as e:
+        return {
+            "trending_skills": [],
+            "verified_matches": [],
+            "upskill_recommendations": [],
+            "source_status": "error",
+            "message": f"Trending skills research unavailable: {str(e)}"
+        }
+
+
+
 #
 # ---------------------------------------------------------------- Optional LLM Chat
 @app.post("/api/llm")
@@ -877,6 +916,46 @@ def generate_resume_endpoint(req: ResumeGenerateRequest):
         )
     except Exception as e:
         raise HTTPException(500, f"PDF generation failed: {str(e)}")
+
+
+@app.get("/api/resume/download")
+def download_resume_get(
+    target: str = "General",
+    template: str = "minimal_professional",
+    db: Session = Depends(get_db)
+):
+    """
+    Direct GET download endpoint for the resume PDF.
+    Generates authentic PDF directly for browser download or navigation.
+    """
+    try:
+        draft = db.query(SavedResume).order_by(SavedResume.updated_at.desc()).first()
+        if draft and draft.resume_data:
+            try:
+                resume_data = json.loads(draft.resume_data)
+                if template:
+                    resume_data["template"] = template
+                if target:
+                    resume_data["target"] = target
+            except Exception:
+                resume_data = resume.build_initial_resume_data(db, target=target, template=template)
+        else:
+            resume_data = resume.build_initial_resume_data(db, target=target, template=template)
+
+        pdf_bytes = resume_pdf.generate_resume_pdf(resume_data)
+        candidate_name = resume_data.get("personal", {}).get("name", "Resume").strip() or "Resume"
+        safe_name = "".join(c for c in candidate_name if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_")
+        filename = f"{safe_name}_Resume.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/pdf"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(500, f"PDF download failed: {str(e)}")
 
 
 @app.post("/api/resume/analyze")

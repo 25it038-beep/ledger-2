@@ -52,9 +52,10 @@ def _get_openai_client() -> OpenAI:
         _client_instance = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=current_key,
-            timeout=45.0,
+            timeout=8.0,
             max_retries=1
         )
+
     return _client_instance
 
 
@@ -300,13 +301,15 @@ def copilot_chat(db: Session, question: str) -> str:
         if now - cached_time < CACHE_TTL_SECONDS:
             return cached_ans
 
-    # Check if query is hackathon-related or resume-related
+    # Check if query is hackathon-related, resume-related, or trending skills related
     q_lower = cleaned_q.lower()
     is_hackathon = any(k in q_lower for k in ["hackathon", "hackathons", "competition", "hack", "shipaton"])
     is_resume = any(k in q_lower for k in ["resume", "cv", "highlight", "internship-ready", "project description", "backend role", "ai/ml resume", "cybersecurity-focused", "ats"])
+    is_skills_trend = any(k in q_lower for k in ["trending skill", "skills today", "in demand", "what to learn", "market demand", "upskill", "high demand", "web research", "skill recommendation", "top skill"])
 
     hackathons_context = ""
     resume_context = ""
+    skills_context = ""
     retrieved_hacks = []
     
     if is_hackathon:
@@ -314,12 +317,15 @@ def copilot_chat(db: Session, question: str) -> str:
             import hackathons
             mode_filter = "Online" if "online" in q_lower else None
             search_term = None
-            for kw in ["ai", "python", "cybersecurity", "web3", "cloud", "machine learning", "mobile"]:
+            for kw in ["ai", "python", "cybersecurity", "web3", "cloud", "machine learning", "mobile", "quantum", "data", "agent"]:
                 if kw in q_lower:
                     search_term = kw
                     break
 
-            if "best" in q_lower or "for me" in q_lower or "recommend" in q_lower or not search_term:
+            use_web_search = any(k in q_lower for k in ["web", "google", "search web", "live search", "online search", "niche"])
+            if use_web_search:
+                retrieved_hacks = hackathons.web_search_hackathons_live(db, query=search_term or "AI Hackathon 2026", limit=3)
+            elif "best" in q_lower or "for me" in q_lower or "recommend" in q_lower or not search_term:
                 retrieved_hacks = hackathons.get_recommended_hackathons(db, limit=3)
             else:
                 retrieved_hacks = hackathons.search_hackathons(db, mode=mode_filter, search=search_term, limit=3)
@@ -338,6 +344,23 @@ def copilot_chat(db: Session, question: str) -> str:
             hackathons_context = "\n".join(lines)
         except Exception as ex:
             print(f"[career/copilot] Error fetching hackathons context: {ex}")
+
+    if is_skills_trend:
+        try:
+            import skills_research
+            intel = skills_research.get_trending_skills_intelligence(db)
+            lines = ["TODAY'S IN-DEMAND SKILLS FROM LIVE WEB RESEARCH:"]
+            for t in intel.get("trending_skills", [])[:5]:
+                lines.append(f"- {t['name']} ({t['category']}): {t['demand']} | Citation: \"{t['sample_headline']}\"")
+            lines.append("\nSTUDENT'S VERIFIED SKILLS MATCHING TODAY'S TRENDS:")
+            for vm in intel.get("verified_matches", []):
+                lines.append(f"- Matched: {vm['user_skill']} (Verified) -> {vm['trend_name']}")
+            lines.append("\nRECOMMENDED NEXT SKILLS TO LEARN TODAY:")
+            for ur in intel.get("upskill_recommendations", [])[:3]:
+                lines.append(f"- {ur['skill']}: {ur['why_recommend']}")
+            skills_context = "\n".join(lines)
+        except Exception as ex:
+            print(f"[career/copilot] Error fetching skills research context: {ex}")
 
     if is_resume:
         try:
@@ -360,8 +383,11 @@ def copilot_chat(db: Session, question: str) -> str:
         prompt_extras = ""
         if is_hackathon and hackathons_context:
             prompt_extras += f"\n\nVERIFIED REAL UPCOMING HACKATHONS (NEVER INVENT ANY OTHER EVENTS, INCLUDE OFFICIAL LINKS):\n{hackathons_context}"
+        if is_skills_trend and skills_context:
+            prompt_extras += f"\n\n{skills_context}"
         if is_resume and resume_context:
             prompt_extras += f"\n\nVERIFIED RESUME DATA (GROUND ALL ADVICE STRICTLY ON THIS DATA, NEVER FABRICATE):\n{resume_context}"
+
 
         system_instruction = COPILOT_SYSTEM_PROMPT
         if is_resume:
@@ -389,6 +415,20 @@ def copilot_chat(db: Session, question: str) -> str:
             )
             return f"Here are verified upcoming hackathons matching your digital identity ({skill_str}):\n\n{items_str}"
 
+        if is_skills_trend:
+            try:
+                import skills_research
+                intel = skills_research.get_trending_skills_intelligence(db)
+                recs = [f"• **{ur['skill']}** ({ur['demand']}): {ur['why_recommend']}" for ur in intel.get("upskill_recommendations", [])[:2]]
+                matches = [vm['user_skill'] for vm in intel.get("verified_matches", [])[:3]]
+                return (
+                    f"Based on today's live web research of global tech hiring, your verified skills in **{', '.join(matches)}** match today's top market demands!\n\n"
+                    f"Here are the most valuable in-demand skills to learn today:\n" + "\n".join(recs)
+                )
+            except Exception:
+                pass
+
+
         # Grounded Resume Assistant Fallbacks
         if "create" in q and "resume" in q:
             if "ai" in q or "ml" in q:
@@ -412,7 +452,7 @@ def copilot_chat(db: Session, question: str) -> str:
             return "For a backend role, highlight your **Backend Developer Intern** experience building RESTful APIs, your Django and Python architecture work, and relational database management with SQL."
 
         if q in ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']:
-            advice = f"Hi! 👋 I see {len(docs)} credential(s) in your archive with skills: {skill_str}. How can I help you today — Resume Creator, hackathons, skill roadmap, or job matching?"
+            advice = f"Hi! I see {len(docs)} credential(s) in your archive with skills: {skill_str}. How can I help you today -- Resume Creator, hackathons, skill roadmap, or job matching?"
         elif 'skill' in q or 'learn' in q:
             advice = f"Based on your archive with skills {skill_str}, I recommend deepening {primary} and building a deployed portfolio project."
         elif 'resume' in q or 'ats' in q:

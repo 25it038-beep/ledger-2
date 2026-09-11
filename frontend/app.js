@@ -195,6 +195,9 @@ function activateTab(tabName) {
   if (tabName === "premium-dashboard") loadPremiumDashboard();
   if (tabName === "hackathons") loadHackathons();
   if (tabName === "resume") loadResumeCreator();
+  if (typeof window.updateAiWidgetContext === "function") {
+    window.updateAiWidgetContext(tabName);
+  }
 }
 
 
@@ -1104,8 +1107,9 @@ async function loadPremiumDashboard() {
 
     // Quick actions
     document.getElementById('dash-quick-actions').innerHTML = [
-      {label:'🚀 Find Hackathons', tab:'hackathons'},
+      {label:'📄 Open Resume Creator', tab:'resume'},
       {label:'Upload Document', tab:'upload'},
+      {label:'Find Hackathons', tab:'hackathons'},
       {label:'Search My Identity', tab:'search'},
       {label:'View Archive', tab:'dashboard'},
       {label:'View Timeline', tab:'timeline'},
@@ -1118,6 +1122,7 @@ async function loadPremiumDashboard() {
 
     // Hackathon intelligence – load asynchronously without blocking dashboard render
     loadDashboardHackathons();
+    loadTrendingSkillsIntelligence();
 
   } catch (e) {
     console.error('Dashboard load error', e);
@@ -1166,12 +1171,15 @@ function renderHackathonCardHtml(h, isCompact = false) {
         <div class="hackathon-card-header">
           <div class="hackathon-card-badges">
             <span class="mode-badge ${escapeHtml(modeClass)}">${escapeHtml(h.mode || 'Online')}</span>
+            ${h.is_trending_today ? `<span class="mode-badge trending" style="background: rgba(210,162,74,0.18); color: var(--accent-strong); border: 1px solid rgba(210,162,74,0.4);"><span style="font-size:10px;">🔥</span> Web Trend</span>` : ''}
+            ${h.source && h.source.startsWith('Web') ? `<span class="mode-badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">🌐 Web Found</span>` : ''}
             ${h.country && h.country !== 'Not specified' && h.country !== 'Global' ? `<span class="mode-badge offline">${escapeHtml(h.country)}</span>` : ''}
           </div>
           <span class="match-score-badge ${matchClass}">
             <span style="font-size:10px;">★</span> ${matchScore}% Match
           </span>
         </div>
+
 
         <h4 class="hackathon-card-title">${escapeHtml(h.name)}</h4>
         <div class="hackathon-card-organizer">by ${escapeHtml(h.organizer || 'Community Organizer')}</div>
@@ -1237,7 +1245,11 @@ function renderBestMatchHero(h) {
       </div>
 
       <h3 class="best-match-title">${escapeHtml(h.name)}</h3>
-      <div class="best-match-organizer">Organized by <b>${escapeHtml(h.organizer || 'Community')}</b> · Source: ${escapeHtml(h.source || 'Verified')}</div>
+      <div class="best-match-organizer">
+        Organized by <b>${escapeHtml(h.organizer || 'Community')}</b> · Source: ${escapeHtml(h.source || 'Verified')}
+        ${h.is_trending_today ? `<span class="mode-badge trending" style="background: rgba(210,162,74,0.18); color: var(--accent-strong); border: 1px solid rgba(210,162,74,0.4); margin-left: 8px;"><span style="font-size:10px;">🔥</span> Web Trending Tech</span>` : ''}
+      </div>
+
 
       ${h.why_relevant ? `
         <div class="hackathon-why-match" style="font-size:12.5px;margin:8px 0 14px;">
@@ -1339,6 +1351,8 @@ async function loadHackathons() {
     const searchInput = document.getElementById('hackathon-search-input');
     const searchBtn = document.getElementById('hackathon-search-btn');
     const triggerSearch = () => {
+      const searchTag = document.getElementById('hackathon-web-search-tag');
+      if (searchTag) searchTag.style.display = 'none';
       hackathonState.search = searchInput ? searchInput.value.trim() : "";
       loadHackathonsList();
     };
@@ -1346,6 +1360,16 @@ async function loadHackathons() {
     if (searchInput) searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') triggerSearch();
     });
+
+    // Live Web Search button
+    const webSearchBtn = document.getElementById('hackathon-web-search-btn');
+    if (webSearchBtn) {
+      webSearchBtn.addEventListener('click', () => {
+        const query = searchInput ? searchInput.value.trim() : "";
+        executeLiveWebSearch(query);
+      });
+    }
+
 
     // Mode buttons
     const modeBtns = document.querySelectorAll('#hackathon-mode-filters button');
@@ -1479,84 +1503,141 @@ async function loadHackathonsList() {
   }
 }
 
+async function executeLiveWebSearch(query) {
+  const gridContainer = document.getElementById('hackathon-grid');
+  const countEl = document.getElementById('hackathon-results-count');
+  const searchTag = document.getElementById('hackathon-web-search-tag');
+
+  if (!gridContainer) return;
+
+  if (searchTag) {
+    searchTag.style.display = 'inline-flex';
+    searchTag.textContent = query ? `🌐 Live Web: "${query}"` : '🌐 Live Web Search: Global';
+  }
+
+  gridContainer.innerHTML = `
+    <div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line sub"></div><div class="skeleton-line tag"></div></div>
+    <div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line sub"></div><div class="skeleton-line tag"></div></div>
+    <div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line sub"></div><div class="skeleton-line tag"></div></div>
+  `;
+  if (countEl) countEl.textContent = 'Searching live web and Google global hackathon indexes...';
+
+  try {
+    const res = await apiFetch(`${API}/hackathons/web-search?q=${encodeURIComponent(query || 'AI Hackathon')}&limit=30`);
+    const data = await res.json();
+    const items = data.hackathons || [];
+
+    if (countEl) {
+      countEl.textContent = `Found ${items.length} live web announcement${items.length === 1 ? '' : 's'} across technology feeds`;
+    }
+
+    if (!items.length) {
+      gridContainer.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;">
+          No live web hackathons found matching "${escapeHtml(query)}". Try another topic like "AI", "Quantum", "Cybersecurity", or "Cloud".
+        </div>
+      `;
+      return;
+    }
+
+    gridContainer.innerHTML = items.map(h => renderHackathonCardHtml(h, false)).join('');
+  } catch (err) {
+    if (countEl) countEl.textContent = 'Web search failed';
+    gridContainer.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        Live web search temporarily unavailable. Check internet connection.
+      </div>
+    `;
+  }
+}
+
+async function loadTrendingSkillsIntelligence() {
+  const container = document.getElementById('dash-trending-skills');
+  if (!container) return;
+
+  try {
+    const res = await apiFetch(`${API}/skills/trending-today`);
+    const data = await res.json();
+    if (!data || data.source_status !== 'ok') return;
+
+    const matches = data.verified_matches || [];
+    const recs = data.upskill_recommendations || [];
+    const updatedDate = data.last_researched ? new Date(data.last_researched).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today';
+
+    container.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-family:var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--accent-strong); font-weight:700; letter-spacing:0.04em; display:flex; align-items:center; gap:6px;">
+          <span class="live-dot" style="width:7px; height:7px;"></span>
+          Market In-Demand Skills Today (Live Web Research)
+        </span>
+        <span style="font-size:10.5px; color:var(--text-muted);">Updated ${updatedDate}</span>
+      </div>
+
+      <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">
+        Real-time technology hiring demand mined from global news and hiring indexes:
+      </div>
+
+      ${matches.length > 0 ? `
+        <div style="margin-bottom:8px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:var(--radius-sm); padding:8px 10px;">
+          <div style="font-size:11px; font-weight:600; color:#4ade80; margin-bottom:4px;">
+            ✓ Your Verified Skills in High Demand Today (${matches.length})
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:5px;">
+            ${matches.map(m => `
+              <span class="skill-tag" style="background:rgba(34,197,94,0.15); border-color:rgba(34,197,94,0.35); color:#86efac; font-size:10.5px; padding:2px 8px;">
+                ${escapeHtml(m.user_skill)} · ${escapeHtml(m.demand)}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${recs.length > 0 ? `
+        <div style="background:rgba(210,162,74,0.06); border:1px solid rgba(210,162,74,0.25); border-radius:var(--radius-sm); padding:8px 10px;">
+          <div style="font-size:11px; font-weight:600; color:var(--accent-strong); margin-bottom:6px;">
+            ⚡ Recommended Skills to Learn Today (Web Trends)
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            ${recs.map(r => `
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; gap:8px;">
+                <div>
+                  <span style="font-weight:600; color:var(--text-primary);">${escapeHtml(r.skill)}</span>
+                  <span style="color:var(--text-muted); font-size:10.5px; margin-left:4px;">${escapeHtml(r.growth)}</span>
+                </div>
+                <button class="primary small-btn" style="padding:2px 8px; font-size:10.5px;" onclick="searchHackathonsForSkill('${escapeHtml(r.skill)}')">
+                  Find Hackathons &rarr;
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+  } catch (e) {
+    console.error('Failed to load trending skills intelligence', e);
+  }
+}
+
+function searchHackathonsForSkill(skillName) {
+  activateTab('hackathons');
+  const input = document.getElementById('hackathon-search-input');
+  if (input) {
+    const cleaned = skillName.split('&')[0].split('/')[0].trim();
+    input.value = cleaned;
+    hackathonState.search = cleaned;
+    loadHackathonsList();
+  }
+}
+
+
 // Dashboard refresh button
 document.getElementById('dash-refresh')?.addEventListener('click', loadPremiumDashboard);
 
 // ---------------------------------------------------------------- AI Assistant Floating Widget
 function setupAiWidget() {
-  window.toggleAiWidget = function(event) {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    const panel = document.getElementById("ai-widget-panel");
-    const input = document.getElementById("ai-widget-input");
-    const log = document.getElementById("ai-widget-log");
-    if (!panel) return;
-
-    const isVisible = panel.classList.contains("open") || panel.style.display === "flex";
-    if (isVisible) {
-      panel.classList.remove("open");
-      panel.style.display = "none";
-    } else {
-      panel.classList.add("open");
-      panel.style.display = "flex";
-      if (log && log.children.length === 0) {
-        const welcome = document.createElement("div");
-        welcome.className = "copilot-msg bot";
-        welcome.textContent = "Hello! 👋 I'm your Digital Identity AI Assistant. Ask me anything about your verified skills, documents, projects, or career trajectory!";
-        log.appendChild(welcome);
-      }
-      setTimeout(() => input?.focus(), 80);
-    }
-  };
-
-  window.sendAiWidgetMessage = async function() {
-    const input = document.getElementById("ai-widget-input");
-    const log = document.getElementById("ai-widget-log");
-    const sendBtn = document.getElementById("ai-widget-send");
-    if (!input || !log) return;
-    const text = input.value.trim();
-    if (!text) return;
-
-    input.value = "";
-
-    const userMsg = document.createElement("div");
-    userMsg.className = "copilot-msg user";
-    userMsg.textContent = text;
-    log.appendChild(userMsg);
-
-    const botMsg = document.createElement("div");
-    botMsg.className = "copilot-msg bot";
-    botMsg.textContent = "Analyzing your digital identity records…";
-    log.appendChild(botMsg);
-    log.scrollTop = log.scrollHeight;
-
-    if (sendBtn) sendBtn.disabled = true;
-    input.disabled = true;
-
-    try {
-      const form = new FormData();
-      form.append("question", text);
-      const res = await apiFetch(`${API}/career/copilot`, { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || res.statusText);
-      botMsg.textContent = data.answer || "No response received.";
-    } catch (err) {
-      botMsg.innerHTML = `AI assistant temporarily unavailable. <button class="primary" style="padding:2px 8px;font-size:11px;margin-left:6px;cursor:pointer;" onclick="window.sendAiWidgetRetry(${JSON.stringify(text)})">Retry</button>`;
-    } finally {
-      if (sendBtn) sendBtn.disabled = false;
-      input.disabled = false;
-      input.focus();
-      log.scrollTop = log.scrollHeight;
-    }
-  };
-
-  window.sendAiWidgetRetry = function(text) {
-    const input = document.getElementById("ai-widget-input");
-    if (input) input.value = text;
-    window.sendAiWidgetMessage();
-  };
+  if (typeof window.updateAiWidgetContext === "function") {
+    window.updateAiWidgetContext(window.aiActiveTab || "premium-dashboard");
+  }
 }
 
 setupAiWidget();

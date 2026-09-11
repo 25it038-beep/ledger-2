@@ -30,6 +30,15 @@ def _clean_text(val: Any) -> str:
     if val is None:
         return ""
     s = str(val).strip()
+    # Strip emojis and unsupported Unicode astral plane characters
+    s = re.sub(r'[\U00010000-\U0010ffff]', '', s)
+    # Normalize common non-ASCII punctuation for Helvetica WinAnsiEncoding
+    s = s.replace('\u2713', '[Verified]').replace('\u2714', '[Verified]')
+    s = s.replace('\u2013', '-').replace('\u2014', '--')
+    s = s.replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"')
+    s = s.replace('\u2022', '*').replace('\u2026', '...')
+    # Encode and ignore characters that cannot be encoded in Latin-1 if using Helvetica
+    s = s.encode('latin-1', 'replace').decode('latin-1')
     return xml_escape(s)
 
 

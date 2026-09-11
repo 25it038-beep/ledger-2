@@ -6,7 +6,8 @@
 <meta name="description" content="Ledger — AI-Powered Digital Identity Intelligence Platform" />
 <meta name="theme-color" content="#0B0E13" />
 <title>Ledger — Digital Identity Intelligence</title>
-<link rel="stylesheet" href="style.css?v=2026_hackathon_live_v10" />
+<link rel="stylesheet" href="style.css?v=2026_hackathon_web_trend_v1" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -36,7 +37,7 @@
         <div class="brand-name">Ledger</div>
         <div class="brand-sub">AI Identity</div>
       </div>
-      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">Menu</button>
     </div>
     <div class="sidebar-user" id="sidebar-user">
       <img id="sidebar-avatar" class="sidebar-avatar" src="" alt="" />
@@ -47,47 +48,47 @@
     </div>
     <nav class="sidebar-nav" role="navigation" aria-label="Primary">
       <a class="sidebar-item active" data-tab="premium-dashboard" role="button" tabindex="0" aria-current="page">
-        <span class="icon" aria-hidden="true">◈</span><span>Dashboard</span>
+        <span class="icon" aria-hidden="true">[09]</span><span>Dashboard</span>
       </a>
-      <a class="sidebar-item" data-tab="upload">
-        <span class="icon"></span><span>Ingest Documents</span>
+      <a class="sidebar-item" data-tab="upload" role="button" tabindex="0">
+        <span class="icon">[01]</span><span>Ingest Documents</span>
       </a>
-      <a class="sidebar-item" data-tab="dashboard">
-        <span class="icon"></span><span>Archive</span>
+      <a class="sidebar-item" data-tab="dashboard" role="button" tabindex="0">
+        <span class="icon">[02]</span><span>Archive</span>
       </a>
-      <a class="sidebar-item" data-tab="timeline">
-        <span class="icon"></span><span>Timeline</span>
+      <a class="sidebar-item" data-tab="timeline" role="button" tabindex="0">
+        <span class="icon">[03]</span><span>Timeline</span>
       </a>
-      <a class="sidebar-item" data-tab="graph">
-        <span class="icon"></span><span>Connections</span>
+      <a class="sidebar-item" data-tab="graph" role="button" tabindex="0">
+        <span class="icon">[04]</span><span>Connections</span>
       </a>
-      <a class="sidebar-item" data-tab="search">
-        <span class="icon"></span><span>Retrieve</span>
+      <a class="sidebar-item" data-tab="search" role="button" tabindex="0">
+        <span class="icon">[05]</span><span>Retrieve</span>
       </a>
-      <a class="sidebar-item" data-tab="career">
-        <span class="icon">💼</span><span>Career Intelligence</span>
+      <a class="sidebar-item" data-tab="career" role="button" tabindex="0">
+        <span class="icon">[06]</span><span>Career Intelligence</span>
       </a>
-      <a class="sidebar-item" data-tab="news">
-        <span class="icon">📰</span><span>Tech Today</span>
+      <a class="sidebar-item" data-tab="news" role="button" tabindex="0">
+        <span class="icon">[07]</span><span>Tech Today</span>
       </a>
-      <a class="sidebar-item" data-tab="hackathons">
-        <span class="icon">🚀</span><span>Hackathon Finder</span>
+      <a class="sidebar-item" data-tab="hackathons" role="button" tabindex="0">
+        <span class="icon">[10]</span><span>Hackathon Finder</span>
       </a>
-      <a class="sidebar-item" data-tab="identity">
-        <span class="icon">👤</span><span>My Identity</span>
+      <a class="sidebar-item" data-tab="identity" role="button" tabindex="0">
+        <span class="icon">[08]</span><span>My Identity</span>
       </a>
-      <a class="sidebar-item" data-tab="resume">
-        <span class="icon">📄</span><span>Resume Creator</span>
+      <a class="sidebar-item" data-tab="resume" role="button" tabindex="0" style="background:rgba(210,162,74,0.12);border-color:rgba(210,162,74,0.35);">
+        <span class="icon" style="color:var(--accent-strong);font-weight:700;">[11]</span><span style="font-weight:600;color:var(--accent-strong);">Resume Creator</span>
       </a>
       <a class="sidebar-item ai-sidebar-item" onclick="window.toggleAiWidget(event)" role="button" title="Open AI Copilot (Ctrl+/)">
-        <span class="icon">✨</span><span>AI Copilot</span><span class="ai-badge-live">LIVE</span>
+        <span class="icon">[AI]</span><span>AI Copilot</span><span class="ai-badge-live">LIVE</span>
       </a>
     </nav>
   </aside>
   <div class="main-area">
     <header class="topbar">
       <div class="topbar-left">
-        <button class="mobile-menu" id="mobile-menu">☰</button>
+        <button class="mobile-menu" id="mobile-menu">Menu</button>
         <h1 class="page-title" id="page-title">Dashboard</h1>
         <nav class="breadcrumbs" id="breadcrumbs"></nav>
       </div>
@@ -95,6 +96,9 @@
         <div class="search-box">
           <input type="text" id="global-search" placeholder="Search identity..." />
         </div>
+        <button class="icon-btn" onclick="document.querySelector('[data-tab=\'resume\']').click()" title="Open Resume Creator" style="background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong);font-weight:600;">
+          Resume Creator
+        </button>
         <button class="icon-btn ai-topbar-pill" onclick="window.toggleAiWidget(event)" title="AI Copilot (Ctrl + /)">
           <span class="ai-indicator-dot small"></span> AI Copilot
         </button>
@@ -141,6 +145,16 @@
 
   <!-- MODULE 1: INGESTION -->
   <section id="tab-upload" class="panel active">
+    <div class="card" style="margin-bottom:18px;background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.35);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+      <div>
+        <div style="font-weight:600;font-size:15px;color:var(--accent-strong);letter-spacing:0.02em;">Resume Creator</div>
+        <div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;">Generate, preview, and download your ATS-compliant professional PDF resume grounded in your verified credentials.</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="primary" onclick="document.querySelector('[data-tab=\'resume\']').click()">Open Resume Creator</button>
+        <a class="btn-secondary" href="/api/resume/download" download style="text-decoration:none;display:inline-flex;align-items:center;">Download Resume PDF</a>
+      </div>
+    </div>
     <div class="upload-grid">
       <div class="card">
         <label class="field-label">Upload a file</label>
@@ -355,7 +369,7 @@
       <p class="masthead-sub">Your digital identity, skills, achievements, and technology intelligence in one place.</p>
       <div class="dash-actions">
         <input type="text" id="dash-search" placeholder="Global search..." />
-        <button class="primary" id="dash-create-resume" onclick="document.querySelector('[data-tab=\'resume\']').click()">📄 Resume Creator</button>
+        <button class="primary" id="dash-create-resume" onclick="document.querySelector('[data-tab=\'resume\']').click()">Resume Creator</button>
         <button class="primary" id="dash-refresh">Refresh</button>
         <span id="dash-updated">Last updated —</span>
       </div>
@@ -372,13 +386,15 @@
       <div class="card">
         <h3 class="section-head">Skills Intelligence</h3>
         <div id="dash-skills"></div>
+        <div id="dash-trending-skills" class="dash-trending-skills-panel" style="margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px;"></div>
       </div>
+
     </div>
 
     <div class="card dash-hackathons-section" style="border: 1px solid rgba(210,162,74,0.3); background: linear-gradient(135deg, rgba(210,162,74,0.04) 0%, rgba(19,26,35,0.95) 100%);">
       <div class="dash-section-header">
         <div>
-          <h3 class="section-head" style="margin-bottom:2px; font-size:18px;">🚀 Hackathon Finder</h3>
+          <h3 class="section-head" style="margin-bottom:2px; font-size:18px;">Hackathon Finder</h3>
           <p class="section-sub">Discover upcoming hackathons matched to your skills and projects.</p>
         </div>
         <div class="dash-section-actions">
@@ -434,11 +450,11 @@
       <div class="hackathon-header-top">
         <div class="header-badge-title">
           <span class="live-indicator"><span class="live-dot"></span>LIVE DATA</span>
-          <h2>🚀 Hackathon Finder</h2>
+          <h2>Hackathon Finder</h2>
         </div>
         <div class="hackathon-meta">
           <span id="hackathon-last-updated" class="news-meta-item">Updated —</span>
-          <button class="primary" id="hackathon-refresh-btn"><span class="refresh-spinner" id="hackathon-refresh-spinner" style="display:none;">⟳</span> Refresh</button>
+          <button class="primary" id="hackathon-refresh-btn"><span class="refresh-spinner" id="hackathon-refresh-spinner" style="display:none;">(refresh)</span> Refresh</button>
         </div>
       </div>
       <div class="hackathon-sub">Discover worldwide and virtual hackathons matched directly to your verified skills, projects, and credentials.</div>
@@ -452,6 +468,7 @@
       <div class="search-bar">
         <input type="text" id="hackathon-search-input" placeholder="Search hackathons by title, organizer, skills, technologies (e.g. AI, Python, AWS)..." />
         <button class="primary" id="hackathon-search-btn">Search</button>
+        <button class="primary" id="hackathon-web-search-btn" title="Run real-time search across global web indexes" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-color: #3b82f6;">Search Live Web</button>
       </div>
 
       <div class="hackathon-filter-row">
@@ -489,6 +506,7 @@
       <!-- Categories & Technologies Strip -->
       <div class="category-strip" id="hackathon-cat-chips">
         <button class="category-chip active" data-cat="All">All Categories</button>
+        <button class="category-chip" data-cat="Trending" style="border-color: rgba(210,162,74,0.6); color: #e5b964;">Web Trending Today</button>
         <button class="category-chip" data-cat="AI">AI & Machine Learning</button>
         <button class="category-chip" data-cat="Python">Python</button>
         <button class="category-chip" data-cat="Cybersecurity">Cybersecurity</button>
@@ -501,7 +519,9 @@
 
     <div class="results-meta-bar">
       <span id="hackathon-results-count" class="results-count">Loading hackathons...</span>
+      <span id="hackathon-web-search-tag" class="pill pill-mode" style="display:none; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">Live Web Search Results</span>
     </div>
+
 
     <!-- Hackathons Grid -->
     <div id="hackathon-grid" class="hackathons-grid"></div>
@@ -523,16 +543,19 @@
       </div>
       <div class="resume-toolbar-actions">
         <button class="primary resume-btn-pulse" id="resume-download-btn">
-          <span class="btn-icon">⬇</span> Download PDF
+          Download PDF
         </button>
+        <a class="btn-secondary" id="resume-direct-download-link" href="/api/resume/download" download style="text-decoration:none;display:inline-flex;align-items:center;">
+          Direct PDF Link
+        </a>
         <button class="secondary" id="resume-save-btn">
-          <span class="btn-icon">💾</span> Save Draft
+          Save Draft
         </button>
         <button class="secondary" id="resume-refresh-btn" title="Re-sync with latest identity data">
-          <span class="btn-icon">🔄</span> Re-Sync
+          Re-Sync
         </button>
         <button class="secondary" id="resume-analyze-btn">
-          <span class="btn-icon">📊</span> ATS Quality
+          ATS Quality
         </button>
         <span id="resume-save-status" class="resume-save-status">Synced</span>
       </div>
@@ -593,11 +616,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-personal')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">👤</span>
               <h4>Personal Information</h4>
-              <span class="evidence-badge evidence-badge-profile">✓ From profile & documents</span>
+              <span class="evidence-badge evidence-badge-profile">[Verified Profile & Docs]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-personal">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-personal">v</span>
           </div>
           <div class="resume-section-body" id="sec-personal">
             <div class="form-grid-2">
@@ -637,11 +659,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-summary')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">📝</span>
               <h4>Professional Summary</h4>
-              <span class="evidence-badge evidence-badge-verified">✓ Grounded on verified data</span>
+              <span class="evidence-badge evidence-badge-verified">[Verified Data Grounded]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-summary">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-summary">v</span>
           </div>
           <div class="resume-section-body" id="sec-summary">
             <div class="field">
@@ -658,11 +679,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-education')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">🎓</span>
               <h4>Education</h4>
-              <span class="evidence-badge evidence-badge-verified">✓ Extracted from academic docs</span>
+              <span class="evidence-badge evidence-badge-verified">[Academic Docs Extracted]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-education">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-education">v</span>
           </div>
           <div class="resume-section-body" id="sec-education">
             <div id="res-education-list"></div>
@@ -674,11 +694,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-skills')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">⚡</span>
               <h4>Technical Skills (Categorized)</h4>
-              <span class="evidence-badge evidence-badge-verified">✓ Document verified</span>
+              <span class="evidence-badge evidence-badge-verified">[Document Verified]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-skills">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-skills">v</span>
           </div>
           <div class="resume-section-body" id="sec-skills">
             <div class="text-muted-xs" style="margin-bottom:10px;">Only categories with actual verified skills are shown. You can add new skills or edit tags below.</div>
@@ -690,11 +709,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-projects')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">🚀</span>
               <h4>Projects</h4>
-              <span class="evidence-badge evidence-badge-verified">✓ Extracted from project reports</span>
+              <span class="evidence-badge evidence-badge-verified">[Project Reports Extracted]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-projects">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-projects">v</span>
           </div>
           <div class="resume-section-body" id="sec-projects">
             <div id="res-projects-list"></div>
@@ -706,11 +724,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-experience')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">💼</span>
               <h4>Experience & Internships</h4>
-              <span class="evidence-badge evidence-badge-verified">✓ From offer letters & certificates</span>
+              <span class="evidence-badge evidence-badge-verified">[Offer Letters & Certificates]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-experience">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-experience">v</span>
           </div>
           <div class="resume-section-body" id="sec-experience">
             <div id="res-experience-list"></div>
@@ -722,11 +739,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-certifications')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">📜</span>
               <h4>Certifications</h4>
-              <span class="evidence-badge evidence-badge-verified">✓ Verified credentials</span>
+              <span class="evidence-badge evidence-badge-verified">[Verified Credentials]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-certifications">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-certifications">v</span>
           </div>
           <div class="resume-section-body" id="sec-certifications">
             <div id="res-certifications-list"></div>
@@ -738,11 +754,10 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-achievements')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">🏆</span>
               <h4>Achievements & Awards</h4>
-              <span class="evidence-badge evidence-badge-verified">✓ Verified hackathons</span>
+              <span class="evidence-badge evidence-badge-verified">[Verified Hackathons]</span>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-achievements">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-achievements">v</span>
           </div>
           <div class="resume-section-body" id="sec-achievements">
             <div id="res-achievements-list"></div>
@@ -754,10 +769,9 @@
         <div class="card resume-card resume-section-card">
           <div class="resume-section-header" onclick="toggleResumeSection('sec-languages')">
             <div class="sec-title-wrap">
-              <span class="sec-icon">🌐</span>
               <h4>Languages</h4>
             </div>
-            <span class="accordion-arrow" id="sec-arrow-sec-languages">▼</span>
+            <span class="accordion-arrow" id="sec-arrow-sec-languages">v</span>
           </div>
           <div class="resume-section-body" id="sec-languages">
             <div class="field">
@@ -1205,7 +1219,8 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-<script src="app.js?v=2026_hackathon_live_v10"></script>
+<script src="app.js?v=2026_hackathon_web_trend_v1"></script>
+
 </body>
 </html>
 
