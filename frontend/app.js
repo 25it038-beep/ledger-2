@@ -26,6 +26,7 @@ async function apiFetch(url, options = {}) {
   }
   return fetch(url, { ...options, headers });
 }
+window.apiFetch = apiFetch;
 
 function showCachedUserBadge() {
   document.getElementById("user-badge").style.display = "flex";
@@ -1103,6 +1104,7 @@ async function loadPremiumDashboard() {
 
     // Quick actions
     document.getElementById('dash-quick-actions').innerHTML = [
+      {label:'🚀 Find Hackathons', tab:'hackathons'},
       {label:'Upload Document', tab:'upload'},
       {label:'Search My Identity', tab:'search'},
       {label:'View Archive', tab:'dashboard'},
@@ -1481,77 +1483,57 @@ async function loadHackathonsList() {
 document.getElementById('dash-refresh')?.addEventListener('click', loadPremiumDashboard);
 
 // ---------------------------------------------------------------- AI Assistant Floating Widget
-let aiWidgetBound = false;
 function setupAiWidget() {
-  const toggleBtn = document.getElementById("ai-widget-toggle");
-  const panel = document.getElementById("ai-widget-panel");
-  const closeBtn = document.getElementById("ai-widget-close");
-  const sendBtn = document.getElementById("ai-widget-send");
-  const input = document.getElementById("ai-widget-input");
-  const log = document.getElementById("ai-widget-log");
-  if (!toggleBtn || !panel) {
-    return;
-  }
-  if (aiWidgetBound) return;
-  aiWidgetBound = true;
-  console.log("[AI Widget] Initialized successfully");
+  window.toggleAiWidget = function(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    const panel = document.getElementById("ai-widget-panel");
+    const input = document.getElementById("ai-widget-input");
+    const log = document.getElementById("ai-widget-log");
+    if (!panel) return;
 
-  toggleBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const isOpen = panel.classList.toggle("open");
-    panel.style.display = isOpen ? "flex" : "none";
-    if (isOpen) {
+    const isVisible = panel.classList.contains("open") || panel.style.display === "flex";
+    if (isVisible) {
+      panel.classList.remove("open");
+      panel.style.display = "none";
+    } else {
+      panel.classList.add("open");
+      panel.style.display = "flex";
       if (log && log.children.length === 0) {
-        appendAiMsg("assistant", "Hello! 👋 I'm your Digital Identity AI Assistant. Ask me anything about your verified skills, documents, projects, or career trajectory!");
+        const welcome = document.createElement("div");
+        welcome.className = "copilot-msg bot";
+        welcome.textContent = "Hello! 👋 I'm your Digital Identity AI Assistant. Ask me anything about your verified skills, documents, projects, or career trajectory!";
+        log.appendChild(welcome);
       }
       setTimeout(() => input?.focus(), 80);
     }
-  });
+  };
 
-  if (closeBtn) {
-    closeBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      panel.classList.remove("open");
-      panel.style.display = "none";
-    });
-  }
+  window.sendAiWidgetMessage = async function() {
+    const input = document.getElementById("ai-widget-input");
+    const log = document.getElementById("ai-widget-log");
+    const sendBtn = document.getElementById("ai-widget-send");
+    if (!input || !log) return;
+    const text = input.value.trim();
+    if (!text) return;
 
-  // Close when clicking outside panel
-  document.addEventListener("click", (e) => {
-    if (panel.classList.contains("open") && !panel.contains(e.target) && !toggleBtn.contains(e.target)) {
-      panel.classList.remove("open");
-      panel.style.display = "none";
-    }
-  });
+    input.value = "";
 
-  // Close on Escape key
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && panel.classList.contains("open")) {
-      panel.classList.remove("open");
-      panel.style.display = "none";
-    }
-  });
+    const userMsg = document.createElement("div");
+    userMsg.className = "copilot-msg user";
+    userMsg.textContent = text;
+    log.appendChild(userMsg);
 
-
-  function appendAiMsg(role, text) {
-    if (!log) return null;
-    const msg = document.createElement("div");
-    msg.className = `copilot-msg ${role === "user" ? "user" : "bot"}`;
-    msg.textContent = text;
-    log.appendChild(msg);
+    const botMsg = document.createElement("div");
+    botMsg.className = "copilot-msg bot";
+    botMsg.textContent = "Analyzing your digital identity records…";
+    log.appendChild(botMsg);
     log.scrollTop = log.scrollHeight;
-    return msg;
-  }
-
-  async function sendQuestion(text) {
-    if (!text || !log) return;
-    appendAiMsg("user", text);
-    const thinking = appendAiMsg("assistant", "Analyzing your digital identity records…");
 
     if (sendBtn) sendBtn.disabled = true;
-    if (input) input.disabled = true;
+    input.disabled = true;
 
     try {
       const form = new FormData();
@@ -1559,49 +1541,25 @@ function setupAiWidget() {
       const res = await apiFetch(`${API}/career/copilot`, { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || res.statusText);
-      thinking.textContent = data.answer || "No response received.";
+      botMsg.textContent = data.answer || "No response received.";
     } catch (err) {
-      thinking.innerHTML = `AI assistant temporarily unavailable. <button class="primary" style="padding:2px 8px;font-size:11px;margin-left:6px;cursor:pointer;" onclick="window.retryAiQuestion(${JSON.stringify(text)})">Retry</button>`;
+      botMsg.innerHTML = `AI assistant temporarily unavailable. <button class="primary" style="padding:2px 8px;font-size:11px;margin-left:6px;cursor:pointer;" onclick="window.sendAiWidgetRetry(${JSON.stringify(text)})">Retry</button>`;
     } finally {
       if (sendBtn) sendBtn.disabled = false;
-      if (input) {
-        input.disabled = false;
-        input.focus();
-      }
+      input.disabled = false;
+      input.focus();
       log.scrollTop = log.scrollHeight;
     }
-  }
-  window.retryAiQuestion = function(text) { sendQuestion(text); };
+  };
 
-  if (sendBtn) {
-    sendBtn.addEventListener("click", () => {
-      const val = input ? input.value.trim() : "";
-      if (val) {
-        input.value = "";
-        sendQuestion(val);
-      }
-    });
-  }
-  if (input) {
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        const val = input.value.trim();
-        if (val) {
-          input.value = "";
-          sendQuestion(val);
-        }
-      }
-    });
-  }
+  window.sendAiWidgetRetry = function(text) {
+    const input = document.getElementById("ai-widget-input");
+    if (input) input.value = text;
+    window.sendAiWidgetMessage();
+  };
 }
 
-// Auto-bind AI Widget as soon as DOM is ready
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", setupAiWidget);
-} else {
-  setupAiWidget();
-}
+setupAiWidget();
 
 // ---------------------------------------------------------------- init
 let appInitialized = false;

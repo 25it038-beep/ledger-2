@@ -6,7 +6,7 @@
 <meta name="description" content="Ledger — AI-Powered Digital Identity Intelligence Platform" />
 <meta name="theme-color" content="#0B0E13" />
 <title>Ledger — Digital Identity Intelligence</title>
-<link rel="stylesheet" href="style.css?v=2026_resume_creator" />
+<link rel="stylesheet" href="style.css?v=2026_hackathon_v2" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -65,19 +65,22 @@
         <span class="icon"></span><span>Retrieve</span>
       </a>
       <a class="sidebar-item" data-tab="career">
-        <span class="icon"></span><span>Career Intelligence</span>
+        <span class="icon">💼</span><span>Career Intelligence</span>
       </a>
       <a class="sidebar-item" data-tab="news">
-        <span class="icon"></span><span>Tech Today</span>
-      </a>
-      <a class="sidebar-item" data-tab="identity">
-        <span class="icon"></span><span>My Identity</span>
+        <span class="icon">📰</span><span>Tech Today</span>
       </a>
       <a class="sidebar-item" data-tab="hackathons">
-        <span class="icon"></span><span>Hackathon Finder</span>
+        <span class="icon">🚀</span><span>Hackathon Finder</span>
+      </a>
+      <a class="sidebar-item" data-tab="identity">
+        <span class="icon">👤</span><span>My Identity</span>
       </a>
       <a class="sidebar-item" data-tab="resume">
         <span class="icon">📄</span><span>Resume Creator</span>
+      </a>
+      <a class="sidebar-item ai-sidebar-item" onclick="window.toggleAiWidget(event)" role="button" title="Open AI Copilot (Ctrl+/)">
+        <span class="icon">✨</span><span>AI Copilot</span><span class="ai-badge-live">LIVE</span>
       </a>
     </nav>
   </aside>
@@ -92,6 +95,9 @@
         <div class="search-box">
           <input type="text" id="global-search" placeholder="Search identity..." />
         </div>
+        <button class="icon-btn ai-topbar-pill" onclick="window.toggleAiWidget(event)" title="AI Copilot (Ctrl + /)">
+          <span class="ai-indicator-dot small"></span> AI Copilot
+        </button>
         <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">Theme</button>
         <button class="icon-btn" aria-label="Notifications">Alerts</button>
         <div class="user-mini" id="topbar-user">
@@ -349,9 +355,11 @@
       <p class="masthead-sub">Your digital identity, skills, achievements, and technology intelligence in one place.</p>
       <div class="dash-actions">
         <input type="text" id="dash-search" placeholder="Global search..." />
+        <button class="primary" id="dash-create-resume" onclick="document.querySelector('[data-tab=\'resume\']').click()">📄 Resume Creator</button>
         <button class="primary" id="dash-refresh">Refresh</button>
         <span id="dash-updated">Last updated —</span>
       </div>
+
     </div>
 
     <div id="dash-stats" class="stats-grid"></div>
@@ -365,6 +373,20 @@
         <h3 class="section-head">Skills Intelligence</h3>
         <div id="dash-skills"></div>
       </div>
+    </div>
+
+    <div class="card dash-hackathons-section" style="border: 1px solid rgba(210,162,74,0.3); background: linear-gradient(135deg, rgba(210,162,74,0.04) 0%, rgba(19,26,35,0.95) 100%);">
+      <div class="dash-section-header">
+        <div>
+          <h3 class="section-head" style="margin-bottom:2px; font-size:18px;">🚀 Hackathon Finder</h3>
+          <p class="section-sub">Discover upcoming hackathons matched to your skills and projects.</p>
+        </div>
+        <div class="dash-section-actions">
+          <span class="live-indicator"><span class="live-dot"></span>LIVE DATA</span>
+          <button class="primary small-btn" id="dash-hackathons-view-all">View All Hackathons &rarr;</button>
+        </div>
+      </div>
+      <div id="dash-hackathons-recommended" class="hackathons-grid"></div>
     </div>
 
     <div class="card">
@@ -381,20 +403,6 @@
     <div class="card">
       <h3 class="section-head">Career Intelligence</h3>
       <div id="dash-insights"></div>
-    </div>
-
-    <div class="card dash-hackathons-section">
-      <div class="dash-section-header">
-        <div>
-          <h3 class="section-head" style="margin-bottom:2px;">🚀 Hackathon Finder</h3>
-          <p class="section-sub">Discover upcoming hackathons matched to your skills and projects.</p>
-        </div>
-        <div class="dash-section-actions">
-          <span class="live-indicator"><span class="live-dot"></span>LIVE DATA</span>
-          <button class="primary small-btn" id="dash-hackathons-view-all">View All Hackathons &rarr;</button>
-        </div>
-      </div>
-      <div id="dash-hackathons-recommended" class="hackathons-grid"></div>
     </div>
 
     <div class="card">
@@ -795,24 +803,128 @@
 
 <!-- AI Widget Floating -->
 <div id="ai-widget" class="ai-widget">
-  <button id="ai-widget-toggle" class="ai-widget-btn" title="AI Assistant" aria-label="Open AI Assistant">AI</button>
+  <button id="ai-widget-toggle" class="ai-widget-btn" onclick="window.toggleAiWidget(event)" title="AI Assistant" aria-label="Open AI Assistant">AI</button>
   <div id="ai-widget-panel" class="ai-widget-panel">
     <div class="ai-widget-header">
       <div class="ai-widget-header-title">
         <span class="ai-indicator-dot"></span>
         <span>AI Assistant</span>
       </div>
-      <button id="ai-widget-close" class="ai-widget-close" aria-label="Close Assistant">✕</button>
+      <button id="ai-widget-close" class="ai-widget-close" onclick="window.toggleAiWidget(event)" aria-label="Close Assistant">✕</button>
     </div>
     <div id="ai-widget-log" class="ai-widget-log copilot-log"></div>
     <div class="ai-widget-footer">
-      <input type="text" id="ai-widget-input" placeholder="Ask about your skills, news, career…" />
-      <button class="primary" id="ai-widget-send">Ask</button>
+      <input type="text" id="ai-widget-input" placeholder="Ask about your skills, news, career…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.sendAiWidgetMessage();}" />
+      <button class="primary" id="ai-widget-send" onclick="window.sendAiWidgetMessage()">Ask</button>
     </div>
   </div>
 </div>
 
-<script src="app.js?v=2026_resume_creator"></script>
+<script>
+// Bulletproof inline AI Widget controller (operates immediately regardless of script load order)
+window.toggleAiWidget = function(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const panel = document.getElementById("ai-widget-panel");
+  const input = document.getElementById("ai-widget-input");
+  const log = document.getElementById("ai-widget-log");
+  if (!panel) return;
+
+  const isVisible = panel.classList.contains("open") || panel.style.display === "flex";
+  if (isVisible) {
+    panel.classList.remove("open");
+    panel.style.display = "none";
+  } else {
+    panel.classList.add("open");
+    panel.style.display = "flex";
+    if (log && log.children.length === 0) {
+      const welcome = document.createElement("div");
+      welcome.className = "copilot-msg bot";
+      welcome.textContent = "Hello! 👋 I'm your Digital Identity AI Assistant. Ask me anything about your verified skills, documents, projects, or career trajectory!";
+      log.appendChild(welcome);
+    }
+    setTimeout(function() {
+      if (input) input.focus();
+    }, 100);
+  }
+};
+
+window.sendAiWidgetMessage = async function() {
+  const input = document.getElementById("ai-widget-input");
+  const log = document.getElementById("ai-widget-log");
+  const sendBtn = document.getElementById("ai-widget-send");
+  if (!input || !log) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = "";
+  
+  // User bubble
+  const userMsg = document.createElement("div");
+  userMsg.className = "copilot-msg user";
+  userMsg.textContent = text;
+  log.appendChild(userMsg);
+
+  // Bot bubble with thinking indicator
+  const botMsg = document.createElement("div");
+  botMsg.className = "copilot-msg bot";
+  botMsg.textContent = "Analyzing your digital identity records…";
+  log.appendChild(botMsg);
+  log.scrollTop = log.scrollHeight;
+
+  if (sendBtn) sendBtn.disabled = true;
+  input.disabled = true;
+
+  try {
+    const form = new FormData();
+    form.append("question", text);
+    const fetcher = typeof window.apiFetch === "function" ? window.apiFetch : fetch;
+    const res = await fetcher("/api/career/copilot", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    botMsg.textContent = data.answer || "No response received.";
+  } catch (err) {
+    botMsg.innerHTML = 'AI assistant temporarily unavailable. <button class="primary" style="padding:2px 8px;font-size:11px;margin-left:6px;cursor:pointer;" onclick="window.sendAiWidgetRetry(' + JSON.stringify(text) + ')">Retry</button>';
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+    log.scrollTop = log.scrollHeight;
+  }
+};
+
+window.sendAiWidgetRetry = function(text) {
+  const input = document.getElementById("ai-widget-input");
+  if (input) input.value = text;
+  window.sendAiWidgetMessage();
+};
+
+// Close when clicking outside the entire AI widget component
+document.addEventListener("click", function(e) {
+  const widget = document.getElementById("ai-widget");
+  const panel = document.getElementById("ai-widget-panel");
+  if (!widget || !panel) return;
+  if ((panel.classList.contains("open") || panel.style.display === "flex") && !widget.contains(e.target)) {
+    panel.classList.remove("open");
+    panel.style.display = "none";
+  }
+});
+
+// Close on Escape key
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") {
+    const panel = document.getElementById("ai-widget-panel");
+    if (panel && (panel.classList.contains("open") || panel.style.display === "flex")) {
+      panel.classList.remove("open");
+      panel.style.display = "none";
+    }
+  }
+});
+</script>
+
+<script src="app.js?v=2026_hackathon_v2"></script>
 </body>
 </html>
 
