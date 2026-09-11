@@ -10,3 +10,6 @@ requests
 python-dotenv
 pyjwt[crypto]
 gunicorn
+openai
+reportlab
+a2wsgi
