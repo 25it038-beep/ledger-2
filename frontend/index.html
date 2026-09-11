@@ -17,8 +17,8 @@
 <body>
 <a href="#page-title" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;">Skip to content</a>
 
-<!-- Auth gate: shown only if Clerk confirms authentication is required -->
-<div id="auth-gate" class="auth-gate" style="display:none;">
+<!-- Auth gate: shown by default until session is verified -->
+<div id="auth-gate" class="auth-gate">
   <div class="auth-card">
     <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
     <div class="masthead-sub" style="margin-bottom:20px;">AI-Powered Digital Identity Platform</div>
@@ -51,7 +51,7 @@
 </div>
 
 
-<div class="app-shell" id="app-shell">
+<div class="app-shell" id="app-shell" style="display:none;">
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="logo">L</div>
@@ -63,12 +63,13 @@
     </div>
     <div class="sidebar-user" id="sidebar-user">
       <img id="sidebar-avatar" class="sidebar-avatar" src="" alt="" />
-      <div>
+      <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div id="sidebar-name" class="sidebar-name">—</div>
           <span id="sidebar-demo-badge" class="pill-demo" style="display:none;">DEMO</span>
         </div>
         <div class="sidebar-email">—</div>
+        <button id="sidebar-signout-btn" class="icon-btn" title="Sign out / Switch account" style="margin-top:6px;padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-secondary);border-radius:4px;cursor:pointer;">Sign Out</button>
       </div>
     </div>
 
@@ -133,10 +134,12 @@
         </button>
         <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">Theme</button>
         <button class="icon-btn" aria-label="Notifications">Alerts</button>
+        <button id="switch-to-clerk-btn" class="icon-btn" title="Sign out of demo and show Clerk authentication" style="display:none;background:rgba(210,162,74,0.18);border:1px solid rgba(210,162,74,0.4);color:var(--accent-strong);font-weight:700;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;">🔑 Sign In with Clerk</button>
         <div class="user-mini" id="topbar-user">
           <img id="topbar-avatar" src="" alt="" />
           <span id="topbar-name"></span>
           <span id="topbar-demo-badge" class="pill-demo" style="display:none;">DEMO</span>
+          <button id="topbar-signout-btn" class="icon-btn" title="Sign out / Switch account" style="margin-left:8px;padding:3px 8px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-secondary);border-radius:4px;cursor:pointer;">Sign Out</button>
         </div>
 
       </div>
@@ -1252,7 +1255,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-<script src="app.js?v=2026_demo_account_v7"></script>
+<script src="app.js?v=2026_auth_fix_v8"></script>
 
 
 </body>

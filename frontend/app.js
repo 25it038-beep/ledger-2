@@ -85,6 +85,15 @@ function showCachedUserBadge() {
   if (topbarDemo) topbarDemo.style.display = isDemo ? "inline-flex" : "none";
   if (headerDemo) headerDemo.style.display = isDemo ? "inline-flex" : "none";
   if (demoResetBtn) demoResetBtn.style.display = isDemo ? "inline-flex" : "none";
+
+  const switchToClerkBtn = document.getElementById("switch-to-clerk-btn");
+  const topbarSignoutBtn = document.getElementById("topbar-signout-btn");
+  const sidebarSignoutBtn = document.getElementById("sidebar-signout-btn");
+  const headerSignoutBtn = document.getElementById("sign-out-btn");
+  if (switchToClerkBtn) switchToClerkBtn.style.display = isDemo ? "inline-flex" : "none";
+  if (topbarSignoutBtn) topbarSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign Out";
+  if (sidebarSignoutBtn) sidebarSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign Out";
+  if (headerSignoutBtn) headerSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign out";
 }
 
 async function loginAsDemoAccount() {
@@ -167,22 +176,39 @@ async function initAuth() {
   document.getElementById("demo-login-btn")?.addEventListener("click", loginAsDemoAccount);
   document.getElementById("demo-login-btn-top")?.addEventListener("click", loginAsDemoAccount);
   document.getElementById("demo-reset-btn")?.addEventListener("click", resetDemoSampleData);
+  document.getElementById("sign-out-btn")?.addEventListener("click", handleSignOut);
+  document.getElementById("topbar-signout-btn")?.addEventListener("click", handleSignOut);
+  document.getElementById("sidebar-signout-btn")?.addEventListener("click", handleSignOut);
+  document.getElementById("switch-to-clerk-btn")?.addEventListener("click", handleSignOut);
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const forceAuth = urlParams.has("auth") || urlParams.has("login") || urlParams.has("signout") || urlParams.has("logout");
+  if (forceAuth) {
+    localStorage.removeItem(DEMO_TOKEN_KEY);
+    localStorage.removeItem(USER_CACHE_KEY);
+    sessionStorage.clear();
+    setCachedUser(null);
+    if (window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
 
   const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
-  if (demoToken) {
+  if (demoToken && !forceAuth) {
     showApp();
     initApp();
     return;
   }
 
-  showCachedUserBadge(); // instant paint from last session, avoids a flash of "signed out"
-
+  // Ensure auth gate is visible immediately so the user never sees an empty dashboard
+  showAuthGate();
+  showCachedUserBadge();
 
   let config;
   try {
     config = await fetch(`${API}/auth/config`).then(r => r.json());
   } catch {
-    // Server unreachable — nothing we can do yet; let the user see the sign-in gate.
+    // Server unreachable — nothing we can do yet; keep the auth gate visible.
     showAuthGate();
     return;
   }
@@ -207,15 +233,24 @@ async function initAuth() {
       }
       script.setAttribute("data-clerk-publishable-key", config.publishableKey);
 
-      const checkClerk = (attempts = 35) => {
+      let attempts = 40;
+      const checkClerk = () => {
         if (window.Clerk) return resolve(window.Clerk);
-        if (attempts <= 0) return reject(new Error("Clerk script load timeout"));
-        setTimeout(() => checkClerk(attempts - 1), 100);
+        if (attempts-- <= 0) return reject(new Error("Clerk script load timeout"));
+        setTimeout(checkClerk, 100);
       };
 
       if (!script.src) {
         script.onload = () => checkClerk();
-        script.onerror = (e) => reject(e);
+        script.onerror = () => {
+          const fallback = document.createElement("script");
+          fallback.crossOrigin = "anonymous";
+          fallback.setAttribute("data-clerk-publishable-key", config.publishableKey);
+          fallback.src = "https://sharing-racer-5715.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+          fallback.onload = () => checkClerk();
+          fallback.onerror = (e) => reject(e);
+          document.head.appendChild(fallback);
+        };
         script.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
       } else {
         checkClerk();
@@ -223,8 +258,10 @@ async function initAuth() {
     });
   };
 
-  document.getElementById("clerk-sign-in").innerHTML =
-    `<div class="auth-loading">Connecting to authentication service…</div>`;
+  const clerkSignIn = document.getElementById("clerk-sign-in");
+  if (clerkSignIn) {
+    clerkSignIn.innerHTML = `<div class="auth-loading">Connecting to authentication service…</div>`;
+  }
 
   try {
     clerk = await loadClerkScript();
@@ -233,7 +270,6 @@ async function initAuth() {
     }
   } catch (e) {
     console.warn("Clerk load notice:", e);
-    const clerkSignIn = document.getElementById("clerk-sign-in");
     if (clerkSignIn) {
       clerkSignIn.innerHTML = `
         <div style="background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.25);border-radius:10px;padding:16px;margin-bottom:16px;text-align:left;">
@@ -378,16 +414,23 @@ function mountSignIn() {
   }
 }
 
-document.getElementById("sign-out-btn").addEventListener("click", async () => {
+async function handleSignOut() {
   localStorage.removeItem(DEMO_TOKEN_KEY);
+  localStorage.removeItem(USER_CACHE_KEY);
+  sessionStorage.clear();
   setCachedUser(null);
-  if (clerk) {
-    try { await clerk.signOut(); } catch {}
+  if (clerk && typeof clerk.signOut === "function") {
+    try { await clerk.signOut(); } catch (e) { console.warn("Clerk signOut error:", e); }
   }
-  showToast("Signed out. You can sign in or use the Demo Account.");
+  showToast("Signed out. Showing authentication portal...");
   showAuthGate();
   if (clerk) mountSignIn();
-});
+}
+
+document.getElementById("sign-out-btn")?.addEventListener("click", handleSignOut);
+document.getElementById("topbar-signout-btn")?.addEventListener("click", handleSignOut);
+document.getElementById("sidebar-signout-btn")?.addEventListener("click", handleSignOut);
+document.getElementById("switch-to-clerk-btn")?.addEventListener("click", handleSignOut);
 
 
 // ---------------------------------------------------------------- Tabs & Sidebar Navigation
