@@ -990,8 +990,91 @@ body.light .skeleton::after { background: linear-gradient(100deg, transparent 20
 .auth-loading { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); padding: 18px 0; }
 .user-badge { display: flex; align-items: center; gap: 10px; }
 .user-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
-.sign-out-btn { background: none; border: none; padding: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-decoration: underline dotted; cursor: pointer; }
 .sign-out-btn:hover { color: var(--accent-strong); }
+
+/* ---------- Demo Account Styles ---------- */
+.demo-auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 22px 0 16px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.demo-auth-divider::before,
+.demo-auth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+.demo-auth-divider span {
+  padding: 0 12px;
+}
+
+.demo-auth-box {
+  background: linear-gradient(135deg, rgba(210,162,74,0.08) 0%, rgba(19,26,35,0.7) 100%);
+  border: 1px solid rgba(210,162,74,0.35);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: center;
+}
+
+.demo-btn {
+  width: 100%;
+  padding: 12px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #d2a24a 0%, #b88628 100%);
+  color: #0B0E13;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(210,162,74,0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.demo-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(210,162,74,0.35);
+}
+
+.demo-features-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.demo-features-hint span {
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
+.pill-demo {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(210,162,74,0.18);
+  border: 1px solid rgba(210,162,74,0.45);
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.demo-reset-pill {
+  animation: pulse-soft 3s infinite;
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
 
 /* ---------- Scrollbars / selection ---------- */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

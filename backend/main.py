@@ -201,6 +201,103 @@ def auth_sync(request: Request, db: Session = Depends(get_db)):
     }
 
 
+@app.post("/api/auth/demo-login")
+def demo_login(db: Session = Depends(get_db)):
+    """Authenticate into the Demo Account with preloaded sample credentials."""
+    demo_clerk_id = "user_demo_ledger_2026"
+    now = datetime.utcnow()
+    user = db.query(User).filter(User.clerk_user_id == demo_clerk_id).first()
+    if not user:
+        user = User(
+            clerk_user_id=demo_clerk_id,
+            email="demo@ledger.ai",
+            name="Harshan Seliyan",
+            image_url="https://ui-avatars.com/api/?name=Harshan+Seliyan&background=d2a24a&color=0B0E13",
+            created_at=now,
+            last_login_at=now,
+            login_count=1,
+        )
+        db.add(user)
+    else:
+        user.last_login_at = now
+        user.login_count = (user.login_count or 0) + 1
+    db.commit()
+    db.refresh(user)
+
+    # Ensure sample documents are loaded if database is empty
+    if db.query(Document).count() == 0:
+        sample_dir = os.path.join(BASE_DIR, "sample_data")
+        if os.path.exists(sample_dir):
+            for filename in sorted(os.listdir(sample_dir)):
+                filepath = os.path.join(sample_dir, filename)
+                if os.path.isfile(filepath) and not filename.startswith("."):
+                    try:
+                        _seed_file(filepath, filename, db)
+                    except Exception as ex:
+                        print(f"[demo] Failed to seed {filename}: {ex}")
+        _refresh_derived_state(db)
+
+    doc_count = db.query(Document).count()
+    skill_count = db.query(Skill).count()
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "image_url": user.image_url,
+        "is_demo": True,
+        "token": "demo-token-session-2026",
+        "last_login_at": user.last_login_at.isoformat(),
+        "login_count": user.login_count,
+        "document_count": doc_count,
+        "skills_count": skill_count,
+        "message": "Demo account loaded with preloaded sample data."
+    }
+
+
+@app.post("/api/demo/reset-sample-data")
+def demo_reset_sample_data(db: Session = Depends(get_db)):
+    """Reset the database to clean sample data from sample_data/ directory."""
+    try:
+        from models import TimelineEvent, KnowledgeRelationship, document_skills, CareerAnalysis, SavedResume
+        db.query(TimelineEvent).delete()
+        db.query(KnowledgeRelationship).delete()
+        db.execute(document_skills.delete())
+        db.query(Document).delete()
+        db.query(Skill).delete()
+        db.query(CareerAnalysis).delete()
+        db.query(SavedResume).delete()
+        db.commit()
+
+        sample_dir = os.path.join(BASE_DIR, "sample_data")
+        seeded = 0
+        if os.path.exists(sample_dir):
+            for filename in sorted(os.listdir(sample_dir)):
+                filepath = os.path.join(sample_dir, filename)
+                if os.path.isfile(filepath) and not filename.startswith("."):
+                    try:
+                        _seed_file(filepath, filename, db)
+                        seeded += 1
+                    except Exception as ex:
+                        print(f"[demo] Failed to seed {filename}: {ex}")
+
+        _refresh_derived_state(db)
+        doc_count = db.query(Document).count()
+        skill_count = db.query(Skill).count()
+
+        return {
+            "status": "ok",
+            "seeded_files": seeded,
+            "document_count": doc_count,
+            "skills_count": skill_count,
+            "message": "Sample data reset and derived states refreshed."
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to reset sample data: {e}")
+
+
+
 def _refresh_derived_state(db: Session):
     """Rebuild the vector index, relationship graph, and timeline.
     Cheap at prototype scale; runs after every upload so retrieval is always fresh."""

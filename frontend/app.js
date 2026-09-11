@@ -3,6 +3,7 @@ const API = "/api";
 // ---------------------------------------------------------------- Clerk authentication
 let clerk = null; // the Clerk instance, once loaded
 const CACHED_USER_KEY = "ledger.cachedUser"; // "login info save" — last-known profile, for instant display on reload
+const DEMO_TOKEN_KEY = "ledger.demoToken";
 
 function getCachedUser() {
   try { return JSON.parse(localStorage.getItem(CACHED_USER_KEY) || "null"); }
@@ -13,9 +14,21 @@ function setCachedUser(user) {
   else localStorage.removeItem(CACHED_USER_KEY);
 }
 
+function showToast(msg) {
+  let toast = document.getElementById("global-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "global-toast";
+    toast.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#131A23;color:#d2a24a;border:1px solid rgba(210,162,74,0.5);padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,0.6);z-index:99999;transition:opacity 0.3s ease;pointer-events:none;";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = "1";
+  setTimeout(() => { toast.style.opacity = "0"; }, 3500);
+}
+
 /** Wraps fetch() so every request to our API carries the signed-in user's
- * Clerk session token, once auth is configured. Falls back to a plain fetch
- * if Clerk isn't loaded/configured (dev mode with no keys set yet). */
+ * Clerk session token or Demo token. */
 async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
   if (clerk && clerk.session) {
@@ -23,6 +36,9 @@ async function apiFetch(url, options = {}) {
       const token = await clerk.session.getToken();
       if (token) headers.set("Authorization", `Bearer ${token}`);
     } catch { /* no active session yet */ }
+  } else {
+    const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
+    if (demoToken) headers.set("Authorization", `Bearer ${demoToken}`);
   }
   return fetch(url, { ...options, headers });
 }
@@ -33,9 +49,11 @@ function showCachedUserBadge() {
   const cached = getCachedUser();
   let name = "Account";
   let image = "https://ui-avatars.com/api/?name=User&background=cba135&color=fff";
+  let isDemo = false;
   if (cached) {
     name = cached.name || cached.email || "Signed in";
     if (cached.image_url) image = cached.image_url;
+    isDemo = !!cached.is_demo;
   } else if (clerk && clerk.user) {
     name = clerk.user.fullName || clerk.user.primaryEmailAddress?.emailAddress || "Signed in";
     if (clerk.user.imageUrl) image = clerk.user.imageUrl;
@@ -50,6 +68,66 @@ function showCachedUserBadge() {
   if (sidebarAvatar) sidebarAvatar.src = image;
   if (topbarName) topbarName.textContent = name;
   if (topbarAvatar) topbarAvatar.src = image;
+
+  const sidebarDemo = document.getElementById("sidebar-demo-badge");
+  const topbarDemo = document.getElementById("topbar-demo-badge");
+  const headerDemo = document.getElementById("header-demo-badge");
+  const demoResetBtn = document.getElementById("demo-reset-btn");
+  if (sidebarDemo) sidebarDemo.style.display = isDemo ? "inline-flex" : "none";
+  if (topbarDemo) topbarDemo.style.display = isDemo ? "inline-flex" : "none";
+  if (headerDemo) headerDemo.style.display = isDemo ? "inline-flex" : "none";
+  if (demoResetBtn) demoResetBtn.style.display = isDemo ? "inline-flex" : "none";
+}
+
+async function loginAsDemoAccount() {
+  const btn = document.getElementById("demo-login-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ Initializing Demo Account & Sample Data...";
+  }
+  try {
+    const res = await fetch(`${API}/auth/demo-login`, { method: "POST" });
+    const data = await res.json();
+    if (data && data.token) {
+      localStorage.setItem(DEMO_TOKEN_KEY, data.token);
+      setCachedUser(data);
+      showApp();
+      initApp();
+      showToast("🚀 Logged in as Demo Account with preloaded sample data!");
+    }
+  } catch (err) {
+    console.error("Demo login error:", err);
+    alert("Could not connect to demo account. Please make sure the backend server is running.");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🚀 Continue with Demo Account (Preloaded Data)";
+    }
+  }
+}
+
+async function resetDemoSampleData() {
+  const btn = document.getElementById("demo-reset-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⟳ Resetting...";
+  }
+  try {
+    const res = await apiFetch(`${API}/demo/reset-sample-data`, { method: "POST" });
+    const data = await res.json();
+    if (data.status === "ok") {
+      showToast("✓ Clean sample data reloaded! Refreshing dashboard...");
+      await loadPremiumDashboard();
+      if (typeof loadHackathons === "function") loadHackathons();
+    }
+  } catch (err) {
+    console.error("Reset sample data error:", err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "⟳ Reload Sample Data";
+    }
+  }
 }
 
 function showApp() {
@@ -63,8 +141,21 @@ function showAuthGate() {
   document.getElementById("app-shell").style.display = "none";
 }
 
+
 async function initAuth() {
+  document.getElementById("demo-login-btn")?.addEventListener("click", loginAsDemoAccount);
+  document.getElementById("demo-reset-btn")?.addEventListener("click", resetDemoSampleData);
+
+  const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
+  const cached = getCachedUser();
+  if (demoToken && cached && cached.is_demo) {
+    showApp();
+    initApp();
+    return;
+  }
+
   showCachedUserBadge(); // instant paint from last session, avoids a flash of "signed out"
+
 
   let config;
   try {
@@ -159,9 +250,16 @@ function mountSignIn() {
 }
 
 document.getElementById("sign-out-btn").addEventListener("click", async () => {
-  if (clerk) await clerk.signOut();
+  localStorage.removeItem(DEMO_TOKEN_KEY);
   setCachedUser(null);
+  if (clerk) {
+    try { await clerk.signOut(); } catch {}
+  }
+  showToast("Signed out. You can sign in or use the Demo Account.");
+  showAuthGate();
+  if (clerk) mountSignIn();
 });
+
 
 // ---------------------------------------------------------------- Tabs & Sidebar Navigation
 function activateTab(tabName) {
@@ -1107,7 +1205,7 @@ async function loadPremiumDashboard() {
 
     // Quick actions
     document.getElementById('dash-quick-actions').innerHTML = [
-      {label:'📄 Open Resume Creator', tab:'resume'},
+      {label:'Open Resume Creator', tab:'resume'},
       {label:'Upload Document', tab:'upload'},
       {label:'Find Hackathons', tab:'hackathons'},
       {label:'Search My Identity', tab:'search'},
@@ -1171,12 +1269,12 @@ function renderHackathonCardHtml(h, isCompact = false) {
         <div class="hackathon-card-header">
           <div class="hackathon-card-badges">
             <span class="mode-badge ${escapeHtml(modeClass)}">${escapeHtml(h.mode || 'Online')}</span>
-            ${h.is_trending_today ? `<span class="mode-badge trending" style="background: rgba(210,162,74,0.18); color: var(--accent-strong); border: 1px solid rgba(210,162,74,0.4);"><span style="font-size:10px;">🔥</span> Web Trend</span>` : ''}
-            ${h.source && h.source.startsWith('Web') ? `<span class="mode-badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">🌐 Web Found</span>` : ''}
+            ${h.is_trending_today ? `<span class="mode-badge trending" style="background: rgba(210,162,74,0.18); color: var(--accent-strong); border: 1px solid rgba(210,162,74,0.4);">Web Trend</span>` : ''}
+            ${h.source && h.source.startsWith('Web') ? `<span class="mode-badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">Web Found</span>` : ''}
             ${h.country && h.country !== 'Not specified' && h.country !== 'Global' ? `<span class="mode-badge offline">${escapeHtml(h.country)}</span>` : ''}
           </div>
           <span class="match-score-badge ${matchClass}">
-            <span style="font-size:10px;">★</span> ${matchScore}% Match
+            ${matchScore}% Match
           </span>
         </div>
 
@@ -1186,15 +1284,15 @@ function renderHackathonCardHtml(h, isCompact = false) {
 
         <div class="hackathon-meta-details">
           <div class="meta-detail-row">
-            <span class="icon">📅</span>
-            <span>Start: ${escapeHtml(h.start_date || 'Not specified')}</span>
+            <span class="icon">Start:</span>
+            <span>${escapeHtml(h.start_date || 'Not specified')}</span>
           </div>
           <div class="meta-detail-row">
-            <span class="icon">⏳</span>
+            <span class="icon">Deadline:</span>
             <span class="${deadlineClass}">${escapeHtml(deadlineStr)}</span>
           </div>
           <div class="meta-detail-row">
-            <span class="icon">📍</span>
+            <span class="icon">Location:</span>
             <span>${escapeHtml(h.location || 'Online / Worldwide')}</span>
           </div>
         </div>
@@ -1215,7 +1313,7 @@ function renderHackathonCardHtml(h, isCompact = false) {
 
       <div class="hackathon-card-action">
         <span class="prize-display">
-          ${prizeStr !== 'Not specified' ? `🏆 ${escapeHtml(prizeStr)}` : '<span style="color:var(--text-muted);font-size:11px;">Prizes: Not specified</span>'}
+          ${prizeStr !== 'Not specified' ? `Prize: ${escapeHtml(prizeStr)}` : '<span style="color:var(--text-muted);font-size:11px;">Prizes: Not specified</span>'}
         </span>
         <a class="view-official-btn" href="${escapeHtml(h.official_url)}" target="_blank" rel="noopener noreferrer">
           View Official Event &rarr;
@@ -1238,16 +1336,16 @@ function renderBestMatchHero(h) {
   return `
     <div class="best-match-card">
       <div class="best-match-top">
-        <span class="best-match-label">★ Best Match For Your Profile</span>
+        <span class="best-match-label">Best Match For Your Profile</span>
         <span class="match-score-badge high" style="font-size:13px;padding:4px 10px;">
-          ★ ${matchScore}% Profile Overlap
+          ${matchScore}% Profile Overlap
         </span>
       </div>
 
       <h3 class="best-match-title">${escapeHtml(h.name)}</h3>
       <div class="best-match-organizer">
         Organized by <b>${escapeHtml(h.organizer || 'Community')}</b> · Source: ${escapeHtml(h.source || 'Verified')}
-        ${h.is_trending_today ? `<span class="mode-badge trending" style="background: rgba(210,162,74,0.18); color: var(--accent-strong); border: 1px solid rgba(210,162,74,0.4); margin-left: 8px;"><span style="font-size:10px;">🔥</span> Web Trending Tech</span>` : ''}
+        ${h.is_trending_today ? `<span class="mode-badge trending" style="background: rgba(210,162,74,0.18); color: var(--accent-strong); border: 1px solid rgba(210,162,74,0.4); margin-left: 8px;">Web Trending Tech</span>` : ''}
       </div>
 
 
@@ -1512,7 +1610,7 @@ async function executeLiveWebSearch(query) {
 
   if (searchTag) {
     searchTag.style.display = 'inline-flex';
-    searchTag.textContent = query ? `🌐 Live Web: "${query}"` : '🌐 Live Web Search: Global';
+    searchTag.textContent = query ? `Live Web: "${query}"` : 'Live Web Search: Global';
   }
 
   gridContainer.innerHTML = `
@@ -1580,7 +1678,7 @@ async function loadTrendingSkillsIntelligence() {
       ${matches.length > 0 ? `
         <div style="margin-bottom:8px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:var(--radius-sm); padding:8px 10px;">
           <div style="font-size:11px; font-weight:600; color:#4ade80; margin-bottom:4px;">
-            ✓ Your Verified Skills in High Demand Today (${matches.length})
+            [Verified] Your Verified Skills in High Demand Today (${matches.length})
           </div>
           <div style="display:flex; flex-wrap:wrap; gap:5px;">
             ${matches.map(m => `
@@ -1595,7 +1693,7 @@ async function loadTrendingSkillsIntelligence() {
       ${recs.length > 0 ? `
         <div style="background:rgba(210,162,74,0.06); border:1px solid rgba(210,162,74,0.25); border-radius:var(--radius-sm); padding:8px 10px;">
           <div style="font-size:11px; font-weight:600; color:var(--accent-strong); margin-bottom:6px;">
-            ⚡ Recommended Skills to Learn Today (Web Trends)
+            Recommended Skills to Learn Today (Web Trends)
           </div>
           <div style="display:flex; flex-direction:column; gap:6px;">
             ${recs.map(r => `
@@ -1750,6 +1848,7 @@ async function loadResumeCreator() {
 
     // Populate dropdowns
     initResumeDropdowns();
+    updateDirectDownloadLinks();
 
     // Populate editor
     populateResumeEditor();
@@ -1779,6 +1878,7 @@ function initResumeDropdowns() {
 
     targetSelect.onchange = async () => {
       activeResumeTarget = targetSelect.value;
+      updateDirectDownloadLinks();
       if (currentResumeData) {
         currentResumeData.target = activeResumeTarget;
         // Re-fetch re-ordered data based on target
@@ -1807,12 +1907,14 @@ function initResumeDropdowns() {
 
     templateSelect.onchange = () => {
       activeResumeTemplate = templateSelect.value;
+      updateDirectDownloadLinks();
       if (currentResumeData) {
         currentResumeData.template = activeResumeTemplate;
         renderLivePreview();
       }
     };
   }
+  updateDirectDownloadLinks();
 }
 
 function populateResumeEditor() {
@@ -1909,9 +2011,9 @@ function renderEducationEditor() {
     <div class="res-item-box">
       <div class="res-item-box-header">
         <span class="evidence-badge ${edu.evidence?.source_type === 'document' ? 'evidence-badge-verified' : 'evidence-badge-manual'}">
-          ${edu.evidence?.source_type === 'document' ? '✓ ' + escapeHtml(edu.evidence.source_doc_title || 'Document') : '✎ Manual Entry'}
+          ${edu.evidence?.source_type === 'document' ? '[Verified] ' + escapeHtml(edu.evidence.source_doc_title || 'Document') : 'Manual Entry'}
         </span>
-        <button class="btn-remove-item" onclick="removeEducationItem(${idx})">✕ Remove</button>
+        <button class="btn-remove-item" onclick="removeEducationItem(${idx})">Remove</button>
       </div>
       <div class="form-grid-2">
         <div class="field">
@@ -1945,8 +2047,8 @@ function renderEducationEditor() {
         degree: "Bachelor of Technology",
         institution: "University Institute",
         branch: "Computer Science",
-        year: "2026",
-        cgpa: "",
+        year: "2022 - 2026",
+        cgpa: "8.5 / 10.0",
         evidence: { source_type: "manual", source_doc_title: "Manual" }
       });
       renderEducationEditor();
@@ -1973,7 +2075,7 @@ window.removeEducationItem = function(idx) {
   }
 };
 
-// ---------------- Skills Categorized Editor
+// ---------------- Skills Editor
 function renderSkillsEditor() {
   const container = document.getElementById("res-skills-categorized");
   if (!container) return;
@@ -1986,7 +2088,7 @@ function renderSkillsEditor() {
         ${list.map(s => `
           <span class="skill-tag-editable">
             ${escapeHtml(s)}
-            <button onclick="removeSkillTag('${escapeHtml(cat)}', '${escapeHtml(s)}')">✕</button>
+            <button onclick="removeSkillTag('${escapeHtml(cat)}', '${escapeHtml(s)}')">x</button>
           </span>
         `).join("")}
       </div>
@@ -2034,9 +2136,9 @@ function renderProjectsEditor() {
     <div class="res-item-box">
       <div class="res-item-box-header">
         <span class="evidence-badge ${p.evidence?.source_type === 'document' ? 'evidence-badge-verified' : 'evidence-badge-manual'}">
-          ${p.evidence?.source_type === 'document' ? '✓ ' + escapeHtml(p.evidence.source_doc_title || 'Document') : '✎ Manual Entry'}
+          ${p.evidence?.source_type === 'document' ? '[Verified] ' + escapeHtml(p.evidence.source_doc_title || 'Document') : 'Manual Entry'}
         </span>
-        <button class="btn-remove-item" onclick="removeProjectItem(${idx})">✕ Remove</button>
+        <button class="btn-remove-item" onclick="removeProjectItem(${idx})">Remove</button>
       </div>
       <div class="form-grid-2">
         <div class="field" style="grid-column: 1 / -1;">
@@ -2117,9 +2219,9 @@ function renderExperienceEditor() {
     <div class="res-item-box">
       <div class="res-item-box-header">
         <span class="evidence-badge ${e.evidence?.source_type === 'document' ? 'evidence-badge-verified' : 'evidence-badge-manual'}">
-          ${e.evidence?.source_type === 'document' ? '✓ ' + escapeHtml(e.evidence.source_doc_title || 'Document') : '✎ Manual Entry'}
+          ${e.evidence?.source_type === 'document' ? '[Verified] ' + escapeHtml(e.evidence.source_doc_title || 'Document') : 'Manual Entry'}
         </span>
-        <button class="btn-remove-item" onclick="removeExperienceItem(${idx})">✕ Remove</button>
+        <button class="btn-remove-item" onclick="removeExperienceItem(${idx})">Remove</button>
       </div>
       <div class="form-grid-2">
         <div class="field">
@@ -2198,9 +2300,9 @@ function renderCertificationsEditor() {
     <div class="res-item-box">
       <div class="res-item-box-header">
         <span class="evidence-badge ${c.evidence?.source_type === 'document' ? 'evidence-badge-verified' : 'evidence-badge-manual'}">
-          ${c.evidence?.source_type === 'document' ? '✓ ' + escapeHtml(c.evidence.source_doc_title || 'Document') : '✎ Manual Entry'}
+          ${c.evidence?.source_type === 'document' ? '[Verified] ' + escapeHtml(c.evidence.source_doc_title || 'Document') : 'Manual Entry'}
         </span>
-        <button class="btn-remove-item" onclick="removeCertificationItem(${idx})">✕ Remove</button>
+        <button class="btn-remove-item" onclick="removeCertificationItem(${idx})">Remove</button>
       </div>
       <div class="form-grid-2">
         <div class="field" style="grid-column: 1 / -1;">
@@ -2263,9 +2365,9 @@ function renderAchievementsEditor() {
     <div class="res-item-box">
       <div class="res-item-box-header">
         <span class="evidence-badge ${a.evidence?.source_type === 'document' ? 'evidence-badge-verified' : 'evidence-badge-manual'}">
-          ${a.evidence?.source_type === 'document' ? '✓ ' + escapeHtml(a.evidence.source_doc_title || 'Document') : '✎ Manual Entry'}
+          ${a.evidence?.source_type === 'document' ? '[Verified] ' + escapeHtml(a.evidence.source_doc_title || 'Document') : 'Manual Entry'}
         </span>
-        <button class="btn-remove-item" onclick="removeAchievementItem(${idx})">✕ Remove</button>
+        <button class="btn-remove-item" onclick="removeAchievementItem(${idx})">Remove</button>
       </div>
       <div class="form-grid-2">
         <div class="field" style="grid-column: 1 / -1;">
@@ -2347,7 +2449,7 @@ function renderSkillIntelligence(intel) {
             <span style="font-size:10px;color:var(--text-muted);margin-left:6px;">(${escapeHtml(s.category)})</span>
           </div>
           <div class="evidence-item-meta" title="${escapeHtml(docTitles)}">
-            ✓ ${s.count} doc${s.count > 1 ? 's' : ''}
+            ${s.count} doc${s.count > 1 ? 's' : ''}
           </div>
         </div>
       `;
@@ -2383,7 +2485,7 @@ function renderQualityChecker(analysis) {
   if (checksGrid && analysis.checks) {
     checksGrid.innerHTML = analysis.checks.map(c => `
       <div class="quality-check-item ${c.passed ? 'passed' : 'failed'}">
-        <span>${c.passed ? '✓' : '⚠'}</span>
+        <span>${c.passed ? '[Pass]' : '[Check]'}</span>
         <div>
           <div style="font-weight:600;">${escapeHtml(c.item)}</div>
           <div style="font-size:9.5px;color:var(--text-muted);">${c.score}/${c.max} pts</div>
@@ -2396,7 +2498,7 @@ function renderQualityChecker(analysis) {
   if (suggList && analysis.suggestions) {
     suggList.innerHTML = analysis.suggestions.map(s => `
       <div class="quality-suggestion-item">
-        💡 <b>Recommendation:</b> ${escapeHtml(s)}
+        <b>Recommendation:</b> ${escapeHtml(s)}
       </div>
     `).join("");
   }
@@ -2603,16 +2705,31 @@ function renderLivePreview() {
 }
 
 // ---------------- Action Handlers: Download PDF, Save Draft, Reset
+function updateDirectDownloadLinks() {
+  const directLink = document.getElementById("resume-direct-download-link");
+  if (directLink) {
+    directLink.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+  }
+}
+
 async function downloadResumePdf() {
-  if (!currentResumeData) return;
   const btn = document.getElementById("resume-download-btn");
   const quickBtn = document.getElementById("preview-download-quick-btn");
-  const origText = btn ? btn.innerHTML : "Download PDF";
+  const origText = btn ? btn.textContent : "Download PDF";
 
-  if (btn) btn.innerHTML = `<span class="btn-icon">⏳</span> Generating...`;
-  if (quickBtn) quickBtn.textContent = "⏳...";
+  if (btn) btn.textContent = "Generating PDF...";
+  if (quickBtn) quickBtn.textContent = "Generating...";
 
   try {
+    if (!currentResumeData) {
+      await loadResumeCreator();
+    }
+    if (!currentResumeData) {
+      // Direct navigation fallback if data is not initialized
+      window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+      return;
+    }
+
     const res = await apiFetch(`${API}/resume/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2620,11 +2737,17 @@ async function downloadResumePdf() {
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: "Generation failed" }));
-      throw new Error(err.detail || "Server failed to generate PDF");
+      console.warn("Resume generate endpoint non-200 response, using direct download endpoint.");
+      window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+      return;
     }
 
     const blob = await res.blob();
+    if (!blob || blob.size === 0) {
+      window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+      return;
+    }
+
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.style.display = "none";
@@ -2633,13 +2756,16 @@ async function downloadResumePdf() {
     a.download = `${name}_Resume.pdf`;
     document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
-    a.remove();
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    }, 30000);
   } catch (err) {
-    alert(`Could not generate PDF: ${err.message}`);
+    console.warn("PDF generation error, triggering fallback direct download:", err);
+    window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
   } finally {
-    if (btn) btn.innerHTML = origText;
-    if (quickBtn) quickBtn.textContent = "⬇ PDF";
+    if (btn) btn.textContent = origText;
+    if (quickBtn) quickBtn.textContent = "PDF";
   }
 }
 
@@ -2703,4 +2829,18 @@ document.getElementById("preview-zoom-out")?.addEventListener("click", () => {
 
 
 initAuth();
+
+// Support direct hash navigation (e.g. #resume)
+window.addEventListener("hashchange", () => {
+  const h = window.location.hash.replace("#", "").trim();
+  if (h) activateTab(h);
+});
+
+// Check initial URL hash on load
+document.addEventListener("DOMContentLoaded", () => {
+  const h = window.location.hash.replace("#", "").trim();
+  if (h) {
+    setTimeout(() => activateTab(h), 150);
+  }
+});
 

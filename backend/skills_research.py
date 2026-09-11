@@ -148,13 +148,13 @@ def fetch_trending_skills_web(force_refresh: bool = False) -> List[Dict[str, Any
 
         total_score = item["base_weight"] + hits * 2
         if total_score >= 12 or hits >= 4:
-            demand = "🔥 Explosive Demand"
+            demand = "Explosive Demand"
             growth = "+42% YoY"
         elif total_score >= 8 or hits >= 2:
-            demand = "📈 High Market Demand"
+            demand = "High Market Demand"
             growth = "+28% YoY"
         else:
-            demand = "⚡ Emerging Tech Demand"
+            demand = "Emerging Tech Demand"
             growth = "+18% YoY"
 
         sample_headline = headlines[0] if headlines else f"High employer demand for {item['name']} recorded across global tech indices."

@@ -696,7 +696,7 @@ def calculate_match(hackathon: Dict[str, Any], user_ctx: Dict[str, Any]) -> Dict
         why_parts.append(f"General upcoming hackathon in {hackathon.get('categories', ['technology'])[0]} to expand your credentials.")
 
     if trending_matches:
-        why_parts.append(f"🔥 Features today's high-demand skill ({trending_matches[0]}) trending in live web research.")
+        why_parts.append(f"Features today's high-demand skill ({trending_matches[0]}) trending in live web research.")
 
     return {
         "match_score": final_pct,

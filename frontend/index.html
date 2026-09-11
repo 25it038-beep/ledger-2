@@ -6,7 +6,8 @@
 <meta name="description" content="Ledger — AI-Powered Digital Identity Intelligence Platform" />
 <meta name="theme-color" content="#0B0E13" />
 <title>Ledger — Digital Identity Intelligence</title>
-<link rel="stylesheet" href="style.css?v=2026_hackathon_web_trend_v1" />
+<link rel="stylesheet" href="style.css?v=2026_demo_account_v1" />
+
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -26,8 +27,20 @@
       Clerk isn't configured yet on the server. Add <code>CLERK_PUBLISHABLE_KEY</code> and
       <code>CLERK_SECRET_KEY</code> to your <code>.env</code> file, restart the server, and reload this page.
     </div>
+
+    <div class="demo-auth-divider"><span>OR QUICK EXPLORE</span></div>
+    <div class="demo-auth-box">
+      <button id="demo-login-btn" class="primary demo-btn">
+        🚀 Continue with Demo Account (Preloaded Data)
+      </button>
+      <div class="demo-features-hint">
+        Instant access with preloaded credentials:
+        <span>B.Tech CS</span> · <span>AI Hackathon Winner</span> · <span>ML Projects</span> · <span>AWS & Python Cert</span>
+      </div>
+    </div>
   </div>
 </div>
+
 
 <div class="app-shell" id="app-shell">
   <aside class="sidebar">
@@ -42,10 +55,14 @@
     <div class="sidebar-user" id="sidebar-user">
       <img id="sidebar-avatar" class="sidebar-avatar" src="" alt="" />
       <div>
-        <div id="sidebar-name" class="sidebar-name">—</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div id="sidebar-name" class="sidebar-name">—</div>
+          <span id="sidebar-demo-badge" class="pill-demo" style="display:none;">DEMO</span>
+        </div>
         <div class="sidebar-email">—</div>
       </div>
     </div>
+
     <nav class="sidebar-nav" role="navigation" aria-label="Primary">
       <a class="sidebar-item active" data-tab="premium-dashboard" role="button" tabindex="0" aria-current="page">
         <span class="icon" aria-hidden="true">[09]</span><span>Dashboard</span>
@@ -102,12 +119,17 @@
         <button class="icon-btn ai-topbar-pill" onclick="window.toggleAiWidget(event)" title="AI Copilot (Ctrl + /)">
           <span class="ai-indicator-dot small"></span> AI Copilot
         </button>
+        <button class="icon-btn demo-reset-pill" id="demo-reset-btn" title="Reload clean sample data" style="display:none;background:rgba(210,162,74,0.12);border-color:rgba(210,162,74,0.35);color:var(--accent-strong);font-weight:600;">
+          ⟳ Reload Sample Data
+        </button>
         <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">Theme</button>
         <button class="icon-btn" aria-label="Notifications">Alerts</button>
         <div class="user-mini" id="topbar-user">
           <img id="topbar-avatar" src="" alt="" />
           <span id="topbar-name"></span>
+          <span id="topbar-demo-badge" class="pill-demo" style="display:none;">DEMO</span>
         </div>
+
       </div>
     </header>
 
@@ -121,10 +143,14 @@
       <div class="user-badge" id="user-badge" style="display:none;">
         <img id="user-avatar" class="user-avatar" src="" alt="" />
         <div class="user-info">
-          <div id="user-name" class="user-name"></div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div id="user-name" class="user-name"></div>
+            <span id="header-demo-badge" class="pill-demo" style="display:none;">DEMO</span>
+          </div>
           <button id="sign-out-btn" class="sign-out-btn">Sign out</button>
         </div>
       </div>
+
     </div>
   </header>
 
@@ -819,8 +845,7 @@
 <div id="ai-widget" class="ai-widget">
   <button id="ai-widget-toggle" class="ai-widget-btn" onclick="window.toggleAiWidget(event)" title="AI Identity Copilot (Ctrl + /)" aria-label="Open AI Identity Copilot">
     <span class="ai-btn-glow"></span>
-    <span style="font-size:15px;">✨</span>
-    <span>AI</span>
+    <span style="font-weight:700;font-size:13px;">AI</span>
   </button>
   <div id="ai-widget-panel" class="ai-widget-panel" role="dialog" aria-label="AI Assistant Panel">
     <!-- Header -->
@@ -829,20 +854,19 @@
         <span class="ai-indicator-dot"></span>
         <div>
           <div class="ai-widget-header-title">Identity Copilot</div>
-          <div class="ai-widget-header-sub">⚡ Llama-3.2 11B Vision</div>
+          <div class="ai-widget-header-sub">Llama-3.2 11B Vision</div>
         </div>
       </div>
       <div class="ai-widget-header-actions">
-        <button class="ai-header-btn" id="ai-widget-expand" onclick="window.toggleAiWidgetExpand(event)" title="Expand / Compact workbench">⛶</button>
-        <button class="ai-header-btn" id="ai-widget-clear" onclick="window.clearAiWidgetChat(event)" title="Clear conversation">🧹</button>
-        <button class="ai-header-btn ai-widget-close" id="ai-widget-close" onclick="window.toggleAiWidget(event)" title="Close window">✕</button>
+        <button class="ai-header-btn" id="ai-widget-expand" onclick="window.toggleAiWidgetExpand(event)" title="Expand / Compact workbench">[+]</button>
+        <button class="ai-header-btn" id="ai-widget-clear" onclick="window.clearAiWidgetChat(event)" title="Clear conversation">Clear</button>
+        <button class="ai-header-btn ai-widget-close" id="ai-widget-close" onclick="window.toggleAiWidget(event)" title="Close window">X</button>
       </div>
     </div>
 
     <!-- Active Tab/Page Context Bar -->
     <div class="ai-widget-context-bar" id="ai-widget-context-bar">
       <div class="ai-context-left">
-        <span>📍</span>
         <span id="ai-widget-page-label">Page: Dashboard</span>
       </div>
       <span class="ai-context-tag">Context-Aware</span>
@@ -860,7 +884,7 @@
     <div class="ai-widget-footer">
       <div class="ai-input-wrap">
         <textarea id="ai-widget-input" rows="1" placeholder="Ask anything about skills, resume, hackathons, news…" onkeydown="window.handleAiInputKey(event)"></textarea>
-        <button class="ai-send-btn" id="ai-widget-send" onclick="window.sendAiWidgetMessage()" title="Send question">➤</button>
+        <button class="ai-send-btn" id="ai-widget-send" onclick="window.sendAiWidgetMessage()" title="Send question">Send</button>
       </div>
       <div class="ai-widget-hint">
         <span>Enter to send</span> • <span>Shift+Enter for newline</span> • <span>Ctrl+/ to toggle</span>
@@ -1006,7 +1030,7 @@ window.toggleAiWidget = function(event) {
     panel.style.display = "flex";
     window.updateAiWidgetContext(window.aiActiveTab || "premium-dashboard");
     if (log && log.children.length === 0) {
-      window.appendAiChatMessage("assistant", "Hello! 👋 I'm your **Digital Identity Copilot** powered by NVIDIA NIM (`meta/llama-3.2-11b-vision-instruct`).\n\nI have real-time access to your verified credentials, skills, resume profile, and upcoming hackathons. How can I help you today?");
+      window.appendAiChatMessage("assistant", "Hello! I'm your **Digital Identity Copilot** powered by NVIDIA NIM (`meta/llama-3.2-11b-vision-instruct`).\n\nI have real-time access to your verified credentials, skills, resume profile, and upcoming hackathons. How can I help you today?");
     }
     setTimeout(function() {
       if (input) {
@@ -1027,7 +1051,7 @@ window.toggleAiWidgetExpand = function(event) {
   const btn = document.getElementById("ai-widget-expand");
   if (!panel) return;
   const isExp = panel.classList.toggle("expanded");
-  if (btn) btn.textContent = isExp ? "🗗" : "⛶";
+  if (btn) btn.textContent = isExp ? "[-]" : "[+]";
   if (btn) btn.title = isExp ? "Compact view" : "Expand view";
 };
 
@@ -1040,7 +1064,7 @@ window.clearAiWidgetChat = function(event) {
   const log = document.getElementById("ai-widget-log");
   if (log) {
     log.innerHTML = "";
-    window.appendAiChatMessage("assistant", "Chat history cleared. 🧹 Ready for your questions across any page or document in your archive.");
+    window.appendAiChatMessage("assistant", "Chat history cleared. Ready for your questions across any page or document in your archive.");
   }
 };
 
@@ -1073,7 +1097,7 @@ window.updateAiWidgetContext = function(tabName) {
     const prompts = AI_PAGE_PROMPTS[tabName] || AI_PAGE_PROMPTS["premium-dashboard"];
     chipsEl.innerHTML = prompts.map(p => {
       const escaped = p.replace(/"/g, '&quot;');
-      return `<button type="button" class="ai-chip" onclick="window.sendAiWidgetChip('${escaped}')"><span>💡</span> ${p}</button>`;
+      return `<button type="button" class="ai-chip" onclick="window.sendAiWidgetChip('${escaped}')">${p}</button>`;
     }).join("");
   }
 };
@@ -1107,7 +1131,7 @@ window.appendAiChatMessage = function(role, rawContent) {
     footer.querySelector(".copilot-copy-btn").addEventListener("click", function(e) {
       e.stopPropagation();
       navigator.clipboard.writeText(rawContent).then(() => {
-        this.textContent = "Copied! ✓";
+        this.textContent = "Copied!";
         setTimeout(() => this.textContent = "Copy", 2000);
       });
     });
@@ -1219,7 +1243,8 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-<script src="app.js?v=2026_hackathon_web_trend_v1"></script>
+<script src="app.js?v=2026_demo_account_v1"></script>
+
 
 </body>
 </html>
