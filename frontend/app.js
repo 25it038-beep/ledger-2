@@ -111,6 +111,7 @@ async function loginAsDemoAccount() {
     const res = await fetch(`${API}/auth/demo-login`, { method: "POST" });
     const data = await res.json();
     if (data && data.token) {
+      sessionStorage.setItem(DEMO_TOKEN_KEY, data.token);
       localStorage.setItem(DEMO_TOKEN_KEY, data.token);
       setCachedUser(data);
       showApp();
@@ -174,7 +175,6 @@ function showAuthGate() {
 
 async function initAuth() {
   document.getElementById("demo-login-btn")?.addEventListener("click", loginAsDemoAccount);
-  document.getElementById("demo-login-btn-top")?.addEventListener("click", loginAsDemoAccount);
   document.getElementById("demo-reset-btn")?.addEventListener("click", resetDemoSampleData);
   document.getElementById("sign-out-btn")?.addEventListener("click", handleSignOut);
   document.getElementById("topbar-signout-btn")?.addEventListener("click", handleSignOut);
@@ -185,6 +185,7 @@ async function initAuth() {
   const forceAuth = urlParams.has("auth") || urlParams.has("login") || urlParams.has("signout") || urlParams.has("logout");
   if (forceAuth) {
     localStorage.removeItem(DEMO_TOKEN_KEY);
+    sessionStorage.removeItem(DEMO_TOKEN_KEY);
     localStorage.removeItem(USER_CACHE_KEY);
     sessionStorage.clear();
     setCachedUser(null);
@@ -193,14 +194,18 @@ async function initAuth() {
     }
   }
 
-  const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
+  // Active demo session only if explicitly chosen in this session
+  const demoToken = sessionStorage.getItem(DEMO_TOKEN_KEY);
   if (demoToken && !forceAuth) {
     showApp();
     initApp();
     return;
   }
 
-  // Ensure auth gate is visible immediately so the user never sees an empty dashboard
+  // Always clear persistent demo token so the initial login page shows Clerk authentication!
+  localStorage.removeItem(DEMO_TOKEN_KEY);
+
+  // Show Auth Gate with Clerk Authentication as primary interface
   showAuthGate();
   showCachedUserBadge();
 
@@ -385,14 +390,21 @@ function mountSignIn() {
           colorBackground: "#131a23",
           colorText: "#f0f2f5",
         },
-        elements: !isLocalhost ? {
-          socialButtonsBlockButton: {
-            display: "none"
+        elements: {
+          ...(!isLocalhost ? {
+            socialButtonsBlockButton: { display: "none" },
+            dividerRow: { display: "none" }
+          } : {}),
+          card: {
+            boxShadow: "none",
+            background: "transparent",
+            border: "none",
+            padding: "0"
           },
-          dividerRow: {
-            display: "none"
+          rootBox: {
+            width: "100%"
           }
-        } : {}
+        }
       }
     });
   } catch (err) {
@@ -416,6 +428,7 @@ function mountSignIn() {
 
 async function handleSignOut() {
   localStorage.removeItem(DEMO_TOKEN_KEY);
+  sessionStorage.removeItem(DEMO_TOKEN_KEY);
   localStorage.removeItem(USER_CACHE_KEY);
   sessionStorage.clear();
   setCachedUser(null);
