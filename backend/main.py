@@ -1062,6 +1062,17 @@ def analyze_resume_endpoint(req: ResumeGenerateRequest):
 
 
 # ---------------------------------------------------------------- Serve frontend
-FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+_possible_frontend_dirs = [
+    os.path.join(BASE_DIR, "frontend"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend"),
+    os.path.join(os.getcwd(), "frontend"),
+]
+FRONTEND_DIR = None
+for _d in _possible_frontend_dirs:
+    if os.path.isdir(_d):
+        FRONTEND_DIR = _d
+        break
+
+if FRONTEND_DIR:
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 

@@ -10,3 +10,6 @@ numpy
 requests
 python-dotenv
 pyjwt[crypto]
+openai
+reportlab
+a2wsgi
