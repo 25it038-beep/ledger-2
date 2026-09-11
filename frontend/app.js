@@ -140,14 +140,18 @@ async function resetDemoSampleData() {
 }
 
 function showApp() {
-  document.getElementById("auth-gate").style.display = "none";
-  document.getElementById("app-shell").style.display = "";
+  const gate = document.getElementById("auth-gate");
+  const shell = document.getElementById("app-shell");
+  if (gate) gate.style.display = "none";
+  if (shell) shell.style.display = "flex";
   showCachedUserBadge();
 }
 
 function showAuthGate() {
-  document.getElementById("auth-gate").style.display = "flex";
-  document.getElementById("app-shell").style.display = "none";
+  const gate = document.getElementById("auth-gate");
+  const shell = document.getElementById("app-shell");
+  if (gate) gate.style.display = "flex";
+  if (shell) shell.style.display = "none";
 }
 
 
@@ -242,8 +246,10 @@ async function initAuth() {
     return;
   }
 
-  const onAuthChange = async () => {
-    if (clerk && clerk.user) {
+  const onAuthChange = async (payload) => {
+    const user = (payload && payload.user) || (clerk && clerk.user);
+    const session = (payload && payload.session) || (clerk && clerk.session);
+    if (user || session) {
       showApp();
       initApp();
       // Save/refresh the local login record on the server ("login info save").
@@ -267,6 +273,30 @@ async function initAuth() {
 
   clerk.addListener(onAuthChange);
   await onAuthChange();
+
+  // Active polling watcher to catch Clerk session updates in virtual mode or after redirect
+  if (!window._clerkWatcherStarted) {
+    window._clerkWatcherStarted = true;
+    setInterval(async () => {
+      const u = clerk?.user || clerk?.session?.user;
+      const s = clerk?.session;
+      if (u || s) {
+        const authGate = document.getElementById("auth-gate");
+        if (authGate && authGate.style.display !== "none") {
+          showApp();
+          initApp();
+          try {
+            const res = await apiFetch(`${API}/auth/sync`, { method: "POST" });
+            if (res.ok) {
+              const saved = await res.json();
+              setCachedUser(saved);
+              showCachedUserBadge();
+            }
+          } catch {}
+        }
+      }
+    }, 400);
+  }
 }
 
 function mountSignIn() {
