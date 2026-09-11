@@ -377,6 +377,8 @@ function mountSignIn() {
   const el = document.getElementById("clerk-sign-in");
   if (!el) return;
   if (el.querySelector(".cl-card") || el.querySelector(".cl-rootBox")) return;
+  const loader = document.getElementById("clerk-loading-indicator");
+  if (loader) loader.remove();
   try {
     const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     const currentOrigin = window.location.origin;
