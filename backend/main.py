@@ -49,7 +49,13 @@ app.add_middleware(
 init_db()
 
 
+@app.head("/")
+def head_root():
+    return Response(status_code=200)
+
+
 @app.get("/health")
+@app.head("/health")
 def health_check():
     return {"status": "ok"}
 
