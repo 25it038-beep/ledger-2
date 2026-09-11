@@ -21,22 +21,28 @@
 <div id="auth-gate" class="auth-gate" style="display:none;">
   <div class="auth-card">
     <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
-    <div class="masthead-sub" style="margin-bottom:22px;">Sign in to open your archive</div>
+    <div class="masthead-sub" style="margin-bottom:20px;">AI-Powered Digital Identity Platform</div>
+
+    <div class="demo-auth-box" style="margin-bottom:20px;background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.3);border-radius:10px;padding:16px;">
+      <button id="demo-login-btn-top" class="primary demo-btn" style="width:100%;padding:12px 18px;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;">
+        🚀 Instant Access: Continue with Demo Account
+      </button>
+      <div class="demo-features-hint" style="margin-top:8px;font-size:12px;color:var(--text-secondary);text-align:center;">
+        Preloaded with <span>Projects</span> · <span>AI Hackathons</span> · <span>Skills & Certifications</span>
+      </div>
+    </div>
+
+    <div class="demo-auth-divider"><span>OR SIGN IN WITH CLERK</span></div>
     <div id="clerk-sign-in"></div>
     <div id="auth-setup-hint" class="auth-setup-hint" style="display:none;">
       Clerk isn't configured yet on the server. Add <code>CLERK_PUBLISHABLE_KEY</code> and
       <code>CLERK_SECRET_KEY</code> to your <code>.env</code> file, restart the server, and reload this page.
     </div>
 
-    <div class="demo-auth-divider"><span>OR QUICK EXPLORE</span></div>
-    <div class="demo-auth-box">
-      <button id="demo-login-btn" class="primary demo-btn">
+    <div class="demo-auth-box" style="margin-top:16px;">
+      <button id="demo-login-btn" class="primary demo-btn" style="width:100%;padding:10px;">
         🚀 Continue with Demo Account (Preloaded Data)
       </button>
-      <div class="demo-features-hint">
-        Instant access with preloaded credentials:
-        <span>B.Tech CS</span> · <span>AI Hackathon Winner</span> · <span>ML Projects</span> · <span>AWS & Python Cert</span>
-      </div>
     </div>
   </div>
 </div>
@@ -1243,7 +1249,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-<script src="app.js?v=2026_demo_account_v2"></script>
+<script src="app.js?v=2026_demo_account_v3"></script>
 
 
 </body>

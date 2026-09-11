@@ -144,6 +144,7 @@ function showAuthGate() {
 
 async function initAuth() {
   document.getElementById("demo-login-btn")?.addEventListener("click", loginAsDemoAccount);
+  document.getElementById("demo-login-btn-top")?.addEventListener("click", loginAsDemoAccount);
   document.getElementById("demo-reset-btn")?.addEventListener("click", resetDemoSampleData);
 
   const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
@@ -234,6 +235,8 @@ async function initAuth() {
 
   const onAuthChange = async () => {
     if (clerk && clerk.user) {
+      showApp();
+      initApp();
       // Save/refresh the local login record on the server ("login info save").
       try {
         const res = await apiFetch(`${API}/auth/sync`, { method: "POST" });
@@ -243,12 +246,13 @@ async function initAuth() {
           showCachedUserBadge();
         }
       } catch { /* non-fatal — user can still use the app */ }
-      showApp();
-      initApp();
     } else {
-      setCachedUser(null);
-      showAuthGate();
-      mountSignIn();
+      const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
+      if (!demoToken) {
+        setCachedUser(null);
+        showAuthGate();
+        mountSignIn();
+      }
     }
   };
 
@@ -262,7 +266,18 @@ function mountSignIn() {
   if (!el) return;
   el.innerHTML = "";
   try {
-    clerk.mountSignIn(el);
+    const currentOrigin = window.location.origin;
+    clerk.mountSignIn(el, {
+      routing: "virtual",
+      afterSignInUrl: currentOrigin + "/",
+      afterSignUpUrl: currentOrigin + "/",
+      redirectUrl: currentOrigin + "/",
+      appearance: {
+        variables: {
+          colorPrimary: "#d2a24a",
+        }
+      }
+    });
   } catch (err) {
     console.warn("clerk.mountSignIn error:", err);
     el.innerHTML = `
