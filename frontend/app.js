@@ -305,7 +305,7 @@ function mountSignIn() {
   if (!el) return;
   el.innerHTML = "";
   try {
-    const currentOrigin = window.location.origin;
+    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     clerk.mountSignIn(el, {
       routing: "virtual",
       forceRedirectUrl: currentOrigin + "/",
@@ -318,7 +318,17 @@ function mountSignIn() {
       appearance: {
         variables: {
           colorPrimary: "#d2a24a",
-        }
+          colorBackground: "#131a23",
+          colorText: "#f0f2f5",
+        },
+        elements: !isLocalhost ? {
+          socialButtonsBlockButton: {
+            display: "none"
+          },
+          dividerRow: {
+            display: "none"
+          }
+        } : {}
       }
     });
   } catch (err) {
