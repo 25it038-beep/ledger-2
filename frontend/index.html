@@ -6,7 +6,7 @@
 <meta name="description" content="Ledger — AI-Powered Digital Identity Intelligence Platform" />
 <meta name="theme-color" content="#0B0E13" />
 <title>Ledger — Digital Identity Intelligence</title>
-<link rel="stylesheet" href="style.css?v=2026_hackathon_v2" />
+<link rel="stylesheet" href="style.css?v=2026_hackathon_live_v10" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -801,27 +801,178 @@
 </div>
 
 
-<!-- AI Widget Floating -->
+<!-- AI Copilot Floating Widget (Global across all pages) -->
 <div id="ai-widget" class="ai-widget">
-  <button id="ai-widget-toggle" class="ai-widget-btn" onclick="window.toggleAiWidget(event)" title="AI Assistant" aria-label="Open AI Assistant">AI</button>
-  <div id="ai-widget-panel" class="ai-widget-panel">
+  <button id="ai-widget-toggle" class="ai-widget-btn" onclick="window.toggleAiWidget(event)" title="AI Identity Copilot (Ctrl + /)" aria-label="Open AI Identity Copilot">
+    <span class="ai-btn-glow"></span>
+    <span style="font-size:15px;">✨</span>
+    <span>AI</span>
+  </button>
+  <div id="ai-widget-panel" class="ai-widget-panel" role="dialog" aria-label="AI Assistant Panel">
+    <!-- Header -->
     <div class="ai-widget-header">
-      <div class="ai-widget-header-title">
+      <div class="ai-widget-header-left">
         <span class="ai-indicator-dot"></span>
-        <span>AI Assistant</span>
+        <div>
+          <div class="ai-widget-header-title">Identity Copilot</div>
+          <div class="ai-widget-header-sub">⚡ Llama-3.2 11B Vision</div>
+        </div>
       </div>
-      <button id="ai-widget-close" class="ai-widget-close" onclick="window.toggleAiWidget(event)" aria-label="Close Assistant">✕</button>
+      <div class="ai-widget-header-actions">
+        <button class="ai-header-btn" id="ai-widget-expand" onclick="window.toggleAiWidgetExpand(event)" title="Expand / Compact workbench">⛶</button>
+        <button class="ai-header-btn" id="ai-widget-clear" onclick="window.clearAiWidgetChat(event)" title="Clear conversation">🧹</button>
+        <button class="ai-header-btn ai-widget-close" id="ai-widget-close" onclick="window.toggleAiWidget(event)" title="Close window">✕</button>
+      </div>
     </div>
+
+    <!-- Active Tab/Page Context Bar -->
+    <div class="ai-widget-context-bar" id="ai-widget-context-bar">
+      <div class="ai-context-left">
+        <span>📍</span>
+        <span id="ai-widget-page-label">Page: Dashboard</span>
+      </div>
+      <span class="ai-context-tag">Context-Aware</span>
+    </div>
+
+    <!-- Contextual Quick Action Chips -->
+    <div class="ai-widget-chips" id="ai-widget-chips">
+      <!-- Injected dynamically based on active page -->
+    </div>
+
+    <!-- Chat Message Log -->
     <div id="ai-widget-log" class="ai-widget-log copilot-log"></div>
+
+    <!-- Footer Input -->
     <div class="ai-widget-footer">
-      <input type="text" id="ai-widget-input" placeholder="Ask about your skills, news, career…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.sendAiWidgetMessage();}" />
-      <button class="primary" id="ai-widget-send" onclick="window.sendAiWidgetMessage()">Ask</button>
+      <div class="ai-input-wrap">
+        <textarea id="ai-widget-input" rows="1" placeholder="Ask anything about skills, resume, hackathons, news…" onkeydown="window.handleAiInputKey(event)"></textarea>
+        <button class="ai-send-btn" id="ai-widget-send" onclick="window.sendAiWidgetMessage()" title="Send question">➤</button>
+      </div>
+      <div class="ai-widget-hint">
+        <span>Enter to send</span> • <span>Shift+Enter for newline</span> • <span>Ctrl+/ to toggle</span>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-// Bulletproof inline AI Widget controller (operates immediately regardless of script load order)
+// =========================================================================
+// AI IDENTITY COPILOT — GLOBAL CONTROLLER (ALL PAGES & TABS)
+// =========================================================================
+window.aiActiveTab = "premium-dashboard";
+
+// Contextual prompt chips per page
+const AI_PAGE_PROMPTS = {
+  "premium-dashboard": [
+    "Summarize my verified skills",
+    "What are my strongest career paths?",
+    "How can I improve my digital identity?",
+    "Show top matching hackathons"
+  ],
+  "dashboard": [
+    "Overview of all documents in my archive",
+    "Which credentials are most verified?",
+    "What skills need additional evidence?"
+  ],
+  "upload": [
+    "What document formats are supported?",
+    "How does automatic credential extraction work?",
+    "What certifications should I upload next?"
+  ],
+  "resume": [
+    "How can I improve my ATS score?",
+    "Tailor my resume for AI / ML Engineer",
+    "Rewrite my project descriptions with metrics",
+    "Which skills should I emphasize on my resume?"
+  ],
+  "hackathons": [
+    "Which upcoming hackathon best matches my skills?",
+    "Give me winning project ideas for hackathons",
+    "What hackathons have deadlines this month?",
+    "How should I pitch my project to hackathon judges?"
+  ],
+  "career": [
+    "What skills am I missing for Senior roles?",
+    "Create a 6-month skill development roadmap",
+    "Which jobs best match my verified credentials?",
+    "What salary expectations fit my profile?"
+  ],
+  "news": [
+    "Summarize the top AI & tech breakthroughs today",
+    "Which tech news topics are most relevant to my skills?",
+    "How do current tech trends impact software engineering careers?"
+  ],
+  "identity": [
+    "Export my verified digital identity summary",
+    "What are my credential credibility scores?",
+    "How can I share my verified skills with recruiters?"
+  ],
+  "timeline": [
+    "Summarize my career timeline highlights",
+    "What was my most impactful achievement year?"
+  ],
+  "graph": [
+    "Explain the skill relationships in my knowledge graph",
+    "Which skills are hubs in my network?"
+  ],
+  "search": [
+    "Find all documents containing Python or Machine Learning",
+    "Search credentials related to Cloud and AWS"
+  ]
+};
+
+// Markdown formatter
+window.renderAiMarkdown = function(text) {
+  if (!text) return "";
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Bold
+  html = html.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+  // Italic
+  html = html.replace(/\*(.*?)\*/g, "<i>$1</i>");
+  // Inline Code
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // Links
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+  // Bullet points
+  const lines = html.split("\n");
+  let inList = false;
+  let out = [];
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("• ") || trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      if (!inList) {
+        out.push("<ul>");
+        inList = true;
+      }
+      out.push("<li>" + trimmed.substring(2) + "</li>");
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      if (!inList) {
+        out.push("<ol>");
+        inList = "ol";
+      }
+      out.push("<li>" + trimmed.replace(/^\d+\.\s/, "") + "</li>");
+    } else {
+      if (inList) {
+        out.push(inList === "ol" ? "</ol>" : "</ul>");
+        inList = false;
+      }
+      out.push(line);
+    }
+  }
+  if (inList) {
+    out.push(inList === "ol" ? "</ol>" : "</ul>");
+  }
+
+  return out.join("\n").replace(/\n\n+/g, "<br><br>").replace(/\n/g, "<br>");
+};
+
+// Toggle Open/Close
 window.toggleAiWidget = function(event) {
   if (event) {
     event.preventDefault();
@@ -839,18 +990,122 @@ window.toggleAiWidget = function(event) {
   } else {
     panel.classList.add("open");
     panel.style.display = "flex";
+    window.updateAiWidgetContext(window.aiActiveTab || "premium-dashboard");
     if (log && log.children.length === 0) {
-      const welcome = document.createElement("div");
-      welcome.className = "copilot-msg bot";
-      welcome.textContent = "Hello! 👋 I'm your Digital Identity AI Assistant. Ask me anything about your verified skills, documents, projects, or career trajectory!";
-      log.appendChild(welcome);
+      window.appendAiChatMessage("assistant", "Hello! 👋 I'm your **Digital Identity Copilot** powered by NVIDIA NIM (`meta/llama-3.2-11b-vision-instruct`).\n\nI have real-time access to your verified credentials, skills, resume profile, and upcoming hackathons. How can I help you today?");
     }
     setTimeout(function() {
-      if (input) input.focus();
-    }, 100);
+      if (input) {
+        input.focus();
+        input.selectionStart = input.selectionEnd = input.value.length;
+      }
+    }, 120);
   }
 };
 
+// Toggle Wide Workbench View
+window.toggleAiWidgetExpand = function(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const panel = document.getElementById("ai-widget-panel");
+  const btn = document.getElementById("ai-widget-expand");
+  if (!panel) return;
+  const isExp = panel.classList.toggle("expanded");
+  if (btn) btn.textContent = isExp ? "🗗" : "⛶";
+  if (btn) btn.title = isExp ? "Compact view" : "Expand view";
+};
+
+// Clear Chat Log
+window.clearAiWidgetChat = function(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const log = document.getElementById("ai-widget-log");
+  if (log) {
+    log.innerHTML = "";
+    window.appendAiChatMessage("assistant", "Chat history cleared. 🧹 Ready for your questions across any page or document in your archive.");
+  }
+};
+
+// Update active page context & chips
+window.updateAiWidgetContext = function(tabName) {
+  window.aiActiveTab = tabName || "premium-dashboard";
+  const labelEl = document.getElementById("ai-widget-page-label");
+  const chipsEl = document.getElementById("ai-widget-chips");
+  
+  const pageNameMap = {
+    "premium-dashboard": "Dashboard",
+    "dashboard": "Archive & Documents",
+    "upload": "Ingestion",
+    "resume": "Resume Creator",
+    "hackathons": "Hackathon Finder",
+    "career": "Career Intelligence",
+    "news": "Tech Today (News)",
+    "identity": "My Identity",
+    "timeline": "Timeline",
+    "graph": "Knowledge Graph",
+    "search": "Retrieval Search"
+  };
+
+  const friendlyName = pageNameMap[tabName] || "Dashboard";
+  if (labelEl) {
+    labelEl.textContent = "Page: " + friendlyName;
+  }
+
+  if (chipsEl) {
+    const prompts = AI_PAGE_PROMPTS[tabName] || AI_PAGE_PROMPTS["premium-dashboard"];
+    chipsEl.innerHTML = prompts.map(p => {
+      const escaped = p.replace(/"/g, '&quot;');
+      return `<button type="button" class="ai-chip" onclick="window.sendAiWidgetChip('${escaped}')"><span>💡</span> ${p}</button>`;
+    }).join("");
+  }
+};
+
+// Send from Chip
+window.sendAiWidgetChip = function(text) {
+  const input = document.getElementById("ai-widget-input");
+  if (input) input.value = text;
+  window.sendAiWidgetMessage();
+};
+
+// Append Chat Message
+window.appendAiChatMessage = function(role, rawContent) {
+  const log = document.getElementById("ai-widget-log");
+  if (!log) return null;
+
+  const msg = document.createElement("div");
+  msg.className = `copilot-msg ${role === "user" ? "user" : "bot"}`;
+
+  if (role === "user") {
+    msg.textContent = rawContent;
+  } else {
+    msg.innerHTML = window.renderAiMarkdown(rawContent);
+
+    // Add footer with copy button
+    const footer = document.createElement("div");
+    footer.className = "copilot-msg-footer";
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    footer.innerHTML = `<span>${timeStr} • AI Copilot</span><button type="button" class="copilot-copy-btn" title="Copy response">Copy</button>`;
+    
+    footer.querySelector(".copilot-copy-btn").addEventListener("click", function(e) {
+      e.stopPropagation();
+      navigator.clipboard.writeText(rawContent).then(() => {
+        this.textContent = "Copied! ✓";
+        setTimeout(() => this.textContent = "Copy", 2000);
+      });
+    });
+    msg.appendChild(footer);
+  }
+
+  log.appendChild(msg);
+  log.scrollTop = log.scrollHeight;
+  return msg;
+};
+
+// Send Message
 window.sendAiWidgetMessage = async function() {
   const input = document.getElementById("ai-widget-input");
   const log = document.getElementById("ai-widget-log");
@@ -860,18 +1115,16 @@ window.sendAiWidgetMessage = async function() {
   if (!text) return;
 
   input.value = "";
-  
-  // User bubble
-  const userMsg = document.createElement("div");
-  userMsg.className = "copilot-msg user";
-  userMsg.textContent = text;
-  log.appendChild(userMsg);
+  input.style.height = "38px";
 
-  // Bot bubble with thinking indicator
-  const botMsg = document.createElement("div");
-  botMsg.className = "copilot-msg bot";
-  botMsg.textContent = "Analyzing your digital identity records…";
-  log.appendChild(botMsg);
+  // User message
+  window.appendAiChatMessage("user", text);
+
+  // Bot thinking indicator
+  const thinking = document.createElement("div");
+  thinking.className = "copilot-msg bot";
+  thinking.innerHTML = `<span class="ai-typing-indicator"><span></span><span></span><span></span></span> <span style="font-size:12px;color:#94a3b8;margin-left:4px;">Thinking with Llama-3.2…</span>`;
+  log.appendChild(thinking);
   log.scrollTop = log.scrollHeight;
 
   if (sendBtn) sendBtn.disabled = true;
@@ -879,14 +1132,23 @@ window.sendAiWidgetMessage = async function() {
 
   try {
     const form = new FormData();
-    form.append("question", text);
+    // Context-enrich question with active page
+    const contextPrefix = window.aiActiveTab ? `[Current Page: ${window.aiActiveTab}] ` : "";
+    form.append("question", contextPrefix + text);
+
     const fetcher = typeof window.apiFetch === "function" ? window.apiFetch : fetch;
     const res = await fetcher("/api/career/copilot", { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || res.statusText);
-    botMsg.textContent = data.answer || "No response received.";
+
+    thinking.remove();
+    window.appendAiChatMessage("assistant", data.answer || "No response received from Copilot.");
   } catch (err) {
-    botMsg.innerHTML = 'AI assistant temporarily unavailable. <button class="primary" style="padding:2px 8px;font-size:11px;margin-left:6px;cursor:pointer;" onclick="window.sendAiWidgetRetry(' + JSON.stringify(text) + ')">Retry</button>';
+    thinking.remove();
+    const errBubble = document.createElement("div");
+    errBubble.className = "copilot-msg bot";
+    errBubble.innerHTML = `AI assistant temporarily unavailable. <button class="primary" style="padding:2px 8px;font-size:11px;margin-left:6px;cursor:pointer;" onclick="window.sendAiWidgetChip(${JSON.stringify(text)})">Retry</button>`;
+    log.appendChild(errBubble);
   } finally {
     if (sendBtn) sendBtn.disabled = false;
     input.disabled = false;
@@ -895,26 +1157,40 @@ window.sendAiWidgetMessage = async function() {
   }
 };
 
-window.sendAiWidgetRetry = function(text) {
-  const input = document.getElementById("ai-widget-input");
-  if (input) input.value = text;
-  window.sendAiWidgetMessage();
+// Handle Input Keypress (Enter vs Shift+Enter)
+window.handleAiInputKey = function(e) {
+  const input = e.target;
+  // Auto-resize height
+  setTimeout(() => {
+    input.style.height = "auto";
+    input.style.height = Math.min(120, Math.max(38, input.scrollHeight)) + "px";
+  }, 0);
+
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    window.sendAiWidgetMessage();
+  }
 };
 
-// Close when clicking outside the entire AI widget component
+// Close when clicking outside
 document.addEventListener("click", function(e) {
   const widget = document.getElementById("ai-widget");
   const panel = document.getElementById("ai-widget-panel");
   if (!widget || !panel) return;
+  // Ignore clicks on topbar / sidebar AI triggers
+  if (e.target.closest && (e.target.closest(".ai-topbar-pill") || e.target.closest(".ai-sidebar-item"))) return;
   if ((panel.classList.contains("open") || panel.style.display === "flex") && !widget.contains(e.target)) {
     panel.classList.remove("open");
     panel.style.display = "none";
   }
 });
 
-// Close on Escape key
-document.addEventListener("keydown", function(e) {
-  if (e.key === "Escape") {
+// Global Keyboard Shortcuts (Ctrl+/ or Cmd+/ to toggle, Escape to close)
+window.addEventListener("keydown", function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+    e.preventDefault();
+    window.toggleAiWidget(e);
+  } else if (e.key === "Escape") {
     const panel = document.getElementById("ai-widget-panel");
     if (panel && (panel.classList.contains("open") || panel.style.display === "flex")) {
       panel.classList.remove("open");
@@ -922,9 +1198,15 @@ document.addEventListener("keydown", function(e) {
     }
   }
 });
+
+// Initialize context chips right away
+document.addEventListener("DOMContentLoaded", function() {
+  window.updateAiWidgetContext(window.aiActiveTab || "premium-dashboard");
+});
 </script>
 
-<script src="app.js?v=2026_hackathon_v2"></script>
+<script src="app.js?v=2026_hackathon_live_v10"></script>
 </body>
 </html>
+
 
