@@ -147,8 +147,7 @@ async function initAuth() {
   document.getElementById("demo-reset-btn")?.addEventListener("click", resetDemoSampleData);
 
   const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
-  const cached = getCachedUser();
-  if (demoToken && cached && cached.is_demo) {
+  if (demoToken) {
     showApp();
     initApp();
     return;
@@ -186,7 +185,7 @@ async function initAuth() {
       }
       script.setAttribute("data-clerk-publishable-key", config.publishableKey);
 
-      const checkClerk = (attempts = 150) => {
+      const checkClerk = (attempts = 35) => {
         if (window.Clerk) return resolve(window.Clerk);
         if (attempts <= 0) return reject(new Error("Clerk script load timeout"));
         setTimeout(() => checkClerk(attempts - 1), 100);
@@ -203,7 +202,7 @@ async function initAuth() {
   };
 
   document.getElementById("clerk-sign-in").innerHTML =
-    `<div class="auth-loading">Loading sign-in…</div>`;
+    `<div class="auth-loading">Connecting to authentication service…</div>`;
 
   try {
     clerk = await loadClerkScript();
@@ -211,15 +210,30 @@ async function initAuth() {
       await clerk.load({ publishableKey: config.publishableKey });
     }
   } catch (e) {
-    console.error("Clerk load error:", e);
-    document.getElementById("clerk-sign-in").innerHTML =
-      `<div class="auth-loading" style="color:var(--accent);">Failed to load Clerk authentication widget. Retrying...</div>`;
-    setTimeout(() => window.location.reload(), 3000);
+    console.warn("Clerk load notice:", e);
+    const clerkSignIn = document.getElementById("clerk-sign-in");
+    if (clerkSignIn) {
+      clerkSignIn.innerHTML = `
+        <div style="background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.25);border-radius:10px;padding:16px;margin-bottom:16px;text-align:left;">
+          <div style="color:var(--accent);font-weight:600;font-size:13px;margin-bottom:6px;">
+            ℹ️ Authentication Notice
+          </div>
+          <div style="color:var(--text-secondary);font-size:12px;line-height:1.5;margin-bottom:14px;">
+            Clerk development keys only accept requests from authorized domains. You can explore the platform live right now in Demo Mode with full preloaded data:
+          </div>
+          <button id="clerk-error-demo-btn" class="primary demo-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">
+            🚀 Enter Demo Mode (Preloaded Data)
+          </button>
+        </div>
+      `;
+      document.getElementById("clerk-error-demo-btn")?.addEventListener("click", loginAsDemoAccount);
+    }
+    showAuthGate();
     return;
   }
 
   const onAuthChange = async () => {
-    if (clerk.user) {
+    if (clerk && clerk.user) {
       // Save/refresh the local login record on the server ("login info save").
       try {
         const res = await apiFetch(`${API}/auth/sync`, { method: "POST" });
@@ -245,8 +259,27 @@ async function initAuth() {
 function mountSignIn() {
   if (!clerk) return;
   const el = document.getElementById("clerk-sign-in");
+  if (!el) return;
   el.innerHTML = "";
-  clerk.mountSignIn(el);
+  try {
+    clerk.mountSignIn(el);
+  } catch (err) {
+    console.warn("clerk.mountSignIn error:", err);
+    el.innerHTML = `
+      <div style="background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.25);border-radius:10px;padding:16px;margin-bottom:16px;text-align:left;">
+        <div style="color:var(--accent);font-weight:600;font-size:13px;margin-bottom:6px;">
+          Clerk Authentication Notice
+        </div>
+        <div style="color:var(--text-secondary);font-size:12px;line-height:1.5;margin-bottom:14px;">
+          Clerk sign-in widget is restricted on this hosted domain. Explore all features with full preloaded data in Demo Mode:
+        </div>
+        <button id="clerk-mount-demo-btn" class="primary demo-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">
+          🚀 Enter Demo Mode (Preloaded Data)
+        </button>
+      </div>
+    `;
+    document.getElementById("clerk-mount-demo-btn")?.addEventListener("click", loginAsDemoAccount);
+  }
 }
 
 document.getElementById("sign-out-btn").addEventListener("click", async () => {

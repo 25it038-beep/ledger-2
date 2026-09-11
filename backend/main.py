@@ -100,8 +100,18 @@ def auto_seed_if_empty():
     try:
         if db.query(Document).count() == 0:
             print("[startup] Database is empty. Ingesting sample data...")
-            sample_dir = os.path.join(BASE_DIR, "sample_data")
-            if os.path.exists(sample_dir):
+            possible_sample_dirs = [
+                os.path.join(BASE_DIR, "sample_data"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_data"),
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data"),
+                os.path.join(os.getcwd(), "sample_data"),
+            ]
+            sample_dir = None
+            for _d in possible_sample_dirs:
+                if os.path.isdir(_d):
+                    sample_dir = _d
+                    break
+            if sample_dir and os.path.exists(sample_dir):
                 for filename in os.listdir(sample_dir):
                     filepath = os.path.join(sample_dir, filename)
                     if os.path.isfile(filepath) and not filename.startswith("."):
