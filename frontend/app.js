@@ -264,8 +264,13 @@ async function initAuth() {
   };
 
   const clerkSignIn = document.getElementById("clerk-sign-in");
-  if (clerkSignIn) {
-    clerkSignIn.innerHTML = `<div class="auth-loading">Connecting to authentication service…</div>`;
+  if (clerkSignIn && !clerkSignIn.children.length) {
+    clerkSignIn.innerHTML = `
+      <div id="clerk-loading-indicator" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:30px 10px; color:var(--text-secondary); text-align:center;">
+        <div style="width:26px; height:26px; border:2.5px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+        <div style="font-size:12.5px; color:var(--text-secondary);">Connecting to Clerk authentication…</div>
+      </div>
+    `;
   }
 
   try {
@@ -371,7 +376,7 @@ function mountSignIn() {
   if (!clerk) return;
   const el = document.getElementById("clerk-sign-in");
   if (!el) return;
-  el.innerHTML = "";
+  if (el.querySelector(".cl-card") || el.querySelector(".cl-rootBox")) return;
   try {
     const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     const currentOrigin = window.location.origin;
