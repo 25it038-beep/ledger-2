@@ -81,9 +81,14 @@ function showCachedUserBadge() {
 
 async function loginAsDemoAccount() {
   const btn = document.getElementById("demo-login-btn");
+  const topBtn = document.getElementById("demo-login-btn-top");
   if (btn) {
     btn.disabled = true;
     btn.textContent = "⏳ Initializing Demo Account & Sample Data...";
+  }
+  if (topBtn) {
+    topBtn.disabled = true;
+    topBtn.textContent = "⏳ Initializing Demo Account...";
   }
   try {
     const res = await fetch(`${API}/auth/demo-login`, { method: "POST" });
@@ -102,6 +107,10 @@ async function loginAsDemoAccount() {
     if (btn) {
       btn.disabled = false;
       btn.textContent = "🚀 Continue with Demo Account (Preloaded Data)";
+    }
+    if (topBtn) {
+      topBtn.disabled = false;
+      topBtn.textContent = "🚀 Instant Access: Continue with Demo Account";
     }
   }
 }
@@ -269,6 +278,10 @@ function mountSignIn() {
     const currentOrigin = window.location.origin;
     clerk.mountSignIn(el, {
       routing: "virtual",
+      forceRedirectUrl: currentOrigin + "/",
+      fallbackRedirectUrl: currentOrigin + "/",
+      signUpForceRedirectUrl: currentOrigin + "/",
+      signUpFallbackRedirectUrl: currentOrigin + "/",
       afterSignInUrl: currentOrigin + "/",
       afterSignUpUrl: currentOrigin + "/",
       redirectUrl: currentOrigin + "/",

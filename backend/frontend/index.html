@@ -33,6 +33,9 @@
     </div>
 
     <div class="demo-auth-divider"><span>OR SIGN IN WITH CLERK</span></div>
+    <div class="clerk-help-tip" style="background:rgba(210,162,74,0.06);border:1px solid rgba(210,162,74,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;line-height:1.5;color:var(--text-secondary);text-align:left;">
+      <strong style="color:var(--accent);">💡 Sign-in Tip:</strong> On hosted platforms like Render, sign in using <span style="color:#f0f2f5;font-weight:600;">Email & Password / OTP</span> to bypass local dev proxy limits. Or click <strong>Instant Access</strong> above.
+    </div>
     <div id="clerk-sign-in"></div>
     <div id="auth-setup-hint" class="auth-setup-hint" style="display:none;">
       Clerk isn't configured yet on the server. Add <code>CLERK_PUBLISHABLE_KEY</code> and
@@ -1249,7 +1252,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-<script src="app.js?v=2026_demo_account_v3"></script>
+<script src="app.js?v=2026_demo_account_v4"></script>
 
 
 </body>
