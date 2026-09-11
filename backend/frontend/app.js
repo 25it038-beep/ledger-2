@@ -49,23 +49,31 @@ function showCachedUserBadge() {
   const cached = getCachedUser();
   let name = "Account";
   let image = "https://ui-avatars.com/api/?name=User&background=cba135&color=fff";
+  let email = "";
   let isDemo = false;
   if (cached) {
     name = cached.name || cached.email || "Signed in";
     if (cached.image_url) image = cached.image_url;
+    email = cached.email || "";
     isDemo = !!cached.is_demo;
-  } else if (clerk && clerk.user) {
-    name = clerk.user.fullName || clerk.user.primaryEmailAddress?.emailAddress || "Signed in";
-    if (clerk.user.imageUrl) image = clerk.user.imageUrl;
+  } else if (clerk && (clerk.user || clerk.session?.user)) {
+    const u = clerk.user || clerk.session.user;
+    name = u.fullName || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.primaryEmailAddress?.emailAddress || "Signed in";
+    if (u.imageUrl) image = u.imageUrl;
+    email = u.primaryEmailAddress?.emailAddress || "";
   }
-  document.getElementById("user-name").textContent = name;
-  document.getElementById("user-avatar").src = image;
+  const userNameEl = document.getElementById("user-name");
+  const userAvatarEl = document.getElementById("user-avatar");
+  if (userNameEl) userNameEl.textContent = name;
+  if (userAvatarEl) userAvatarEl.src = image;
   const sidebarName = document.getElementById("sidebar-name");
   const sidebarAvatar = document.getElementById("sidebar-avatar");
+  const sidebarEmail = document.querySelector(".sidebar-email");
   const topbarName = document.getElementById("topbar-name");
   const topbarAvatar = document.getElementById("topbar-avatar");
   if (sidebarName) sidebarName.textContent = name;
   if (sidebarAvatar) sidebarAvatar.src = image;
+  if (sidebarEmail && email) sidebarEmail.textContent = email;
   if (topbarName) topbarName.textContent = name;
   if (topbarAvatar) topbarAvatar.src = image;
 
@@ -254,7 +262,17 @@ async function initAuth() {
       initApp();
       // Save/refresh the local login record on the server ("login info save").
       try {
-        const res = await apiFetch(`${API}/auth/sync`, { method: "POST" });
+        const uObj = user || session?.user;
+        const profilePayload = {
+          name: uObj?.fullName || [uObj?.firstName, uObj?.lastName].filter(Boolean).join(" ") || "",
+          email: uObj?.primaryEmailAddress?.emailAddress || "",
+          image_url: uObj?.imageUrl || "",
+        };
+        const res = await apiFetch(`${API}/auth/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(profilePayload),
+        });
         if (res.ok) {
           const saved = await res.json();
           setCachedUser(saved);
@@ -286,7 +304,16 @@ async function initAuth() {
           showApp();
           initApp();
           try {
-            const res = await apiFetch(`${API}/auth/sync`, { method: "POST" });
+            const profilePayload = {
+              name: u?.fullName || [u?.firstName, u?.lastName].filter(Boolean).join(" ") || "",
+              email: u?.primaryEmailAddress?.emailAddress || "",
+              image_url: u?.imageUrl || "",
+            };
+            const res = await apiFetch(`${API}/auth/sync`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(profilePayload),
+            });
             if (res.ok) {
               const saved = await res.json();
               setCachedUser(saved);
@@ -306,6 +333,7 @@ function mountSignIn() {
   el.innerHTML = "";
   try {
     const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    const currentOrigin = window.location.origin;
     clerk.mountSignIn(el, {
       routing: "virtual",
       forceRedirectUrl: currentOrigin + "/",

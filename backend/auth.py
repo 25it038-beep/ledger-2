@@ -137,14 +137,26 @@ def fetch_clerk_user(clerk_user_id: str) -> dict:
         }
 
     sec_key = get_clerk_secret_key()
-    resp = requests.get(
-        f"https://api.clerk.com/v1/users/{clerk_user_id}",
-        headers={"Authorization": f"Bearer {sec_key}"},
-        timeout=10,
-    )
-    if resp.status_code != 200:
-        raise AuthError(f"Could not fetch Clerk user profile: {resp.text}", 502)
-    return resp.json()
+    try:
+        resp = requests.get(
+            f"https://api.clerk.com/v1/users/{clerk_user_id}",
+            headers={"Authorization": f"Bearer {sec_key}"},
+            timeout=8,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        print(f"[auth] Clerk API returned {resp.status_code}: {resp.text[:100]}")
+    except Exception as e:
+        print(f"[auth] Clerk API profile fetch network warning: {e}")
+
+    # Fail-safe profile so login never fails due to backend-to-Clerk API connection
+    short_name = clerk_user_id.replace("user_", "")[:6]
+    return {
+        "first_name": "Ledger",
+        "last_name": f"User ({short_name})",
+        "image_url": f"https://ui-avatars.com/api/?name={short_name}&background=d2a24a&color=0B0E13",
+        "email_addresses": [],
+    }
 
 
 def get_bearer_token(authorization_header: str | None) -> str | None:

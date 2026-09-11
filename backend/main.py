@@ -151,8 +151,14 @@ def auth_config():
     }
 
 
+class AuthSyncRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    image_url: Optional[str] = None
+
+
 @app.post("/api/auth/sync")
-def auth_sync(request: Request, db: Session = Depends(get_db)):
+def auth_sync(request: Request, payload: Optional[AuthSyncRequest] = None, db: Session = Depends(get_db)):
     """Called by the frontend right after a successful Clerk sign-in.
     Verifies the token again, fetches the profile from Clerk, and saves/
     updates the local login record ("login info save")."""
@@ -169,6 +175,15 @@ def auth_sync(request: Request, db: Session = Depends(get_db)):
     if addresses:
         email = addresses[0].get("email_address")
     name = " ".join(filter(None, [profile.get("first_name"), profile.get("last_name")])).strip() or email
+    image_url = profile.get("image_url")
+
+    if payload:
+        if payload.email:
+            email = payload.email
+        if payload.name:
+            name = payload.name
+        if payload.image_url:
+            image_url = payload.image_url
 
     user = db.query(User).filter(User.clerk_user_id == clerk_user_id).first()
     now = datetime.utcnow()
@@ -201,7 +216,7 @@ def auth_sync(request: Request, db: Session = Depends(get_db)):
     if user:
         user.email = email
         user.name = name
-        user.image_url = profile.get("image_url")
+        user.image_url = image_url
         user.last_login_at = now
         user.login_count = (user.login_count or 0) + 1
         db.commit()
