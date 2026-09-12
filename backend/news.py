@@ -299,12 +299,18 @@ def fetch_news(category: str = None, search: str = None, limit: int = 60) -> Lis
     return results[:limit]
 
 
-def get_user_skills(db):
-    """Return list of skill names extracted from documents."""
-    from models import Skill
+def get_user_skills(db, user_id: int | None = None) -> list[str]:
+    """Return list of skill names extracted from documents belonging to user_id."""
+    from models import Document
     try:
-        skills = db.query(Skill).all()
-        return [s.name for s in skills]
+        q = db.query(Document)
+        if user_id is not None:
+            q = q.filter(Document.user_id == user_id)
+        skills_set = set()
+        for doc in q.all():
+            for s in doc.skills:
+                skills_set.add(s.name)
+        return sorted(skills_set)
     except Exception:
         return []
 

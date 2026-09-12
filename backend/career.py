@@ -103,8 +103,11 @@ def _extract_json(text: str) -> dict:
         raise CareerEngineError("Could not parse JSON report from NVIDIA response.")
 
 
-def _build_profile_context(db: Session) -> str:
-    docs = db.query(Document).order_by(Document.doc_date.asc()).all()
+def _build_profile_context(db: Session, user_id: int | None = None) -> str:
+    q = db.query(Document)
+    if user_id is not None:
+        q = q.filter(Document.user_id == user_id)
+    docs = q.order_by(Document.doc_date.asc()).all()
     if not docs:
         return "No documents uploaded yet."
 
@@ -117,13 +120,11 @@ def _build_profile_context(db: Session) -> str:
     return "\n".join(lines)
 
 
-def _get_resume_text(db: Session) -> str:
-    resume = (
-        db.query(Document)
-        .filter(Document.category == "Resume")
-        .order_by(Document.upload_date.desc())
-        .first()
-    )
+def _get_resume_text(db: Session, user_id: int | None = None) -> str:
+    q = db.query(Document).filter(Document.category == "Resume")
+    if user_id is not None:
+        q = q.filter(Document.user_id == user_id)
+    resume = q.order_by(Document.upload_date.desc()).first()
     return (resume.extracted_text or "")[:800] if resume else ""
 
 
@@ -153,8 +154,11 @@ Shape:
 
 
 
-def _generate_instant_report(db: Session) -> dict:
-    docs = db.query(Document).order_by(Document.doc_date.asc()).all()
+def _generate_instant_report(db: Session, user_id: int | None = None) -> dict:
+    q = db.query(Document)
+    if user_id is not None:
+        q = q.filter(Document.user_id == user_id)
+    docs = q.order_by(Document.doc_date.asc()).all()
     all_skills = list({s.name for d in docs for s in d.skills}) or ["Python", "Problem Solving", "Project Management"]
     
     readiness_score = min(95, max(65, len(docs) * 12 + len(all_skills) * 3))
@@ -234,11 +238,14 @@ _job_cache: dict[str, tuple[float, dict]] = {}
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
-def run_career_analysis(db: Session) -> dict:
-    doc_count = db.query(Document).count()
+def run_career_analysis(db: Session, user_id: int | None = None) -> dict:
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    doc_count = q_doc.count()
     try:
-        profile = _build_profile_context(db)
-        resume_text = _get_resume_text(db)
+        profile = _build_profile_context(db, user_id=user_id)
+        resume_text = _get_resume_text(db, user_id=user_id)
         user_message = (
             f"STUDENT DIGITAL IDENTITY:\n{profile}\n\n"
             f"RESUME TEXT:\n{resume_text or '(none)'}\n\n"
@@ -248,10 +255,10 @@ def run_career_analysis(db: Session) -> dict:
         report = _extract_json(raw)
     except Exception as e:
         print(f"[CareerEngine NVIDIA] LLM call fallback: {e}")
-        report = _generate_instant_report(db)
+        report = _generate_instant_report(db, user_id=user_id)
 
     # Save to database
-    db.add(CareerAnalysis(document_count=doc_count, report_json=json.dumps(report)))
+    db.add(CareerAnalysis(user_id=user_id, document_count=doc_count, report_json=json.dumps(report)))
     db.commit()
 
     # Attach live metadata for immediate frontend rendering
@@ -265,18 +272,26 @@ def run_career_analysis(db: Session) -> dict:
 
 
 
-def get_latest_analysis(db: Session) -> dict | None:
-    row = db.query(CareerAnalysis).order_by(CareerAnalysis.generated_at.desc()).first()
+def get_latest_analysis(db: Session, user_id: int | None = None) -> dict | None:
+    q = db.query(CareerAnalysis)
+    if user_id is not None:
+        q = q.filter(CareerAnalysis.user_id == user_id)
+    row = q.order_by(CareerAnalysis.generated_at.desc()).first()
     if not row:
         return None
     report = json.loads(row.report_json)
     gen_at = row.generated_at.isoformat()
     if not gen_at.endswith("Z") and "+" not in gen_at:
         gen_at += "Z"
+    
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+        
     report["_meta"] = {
         "generated_at": gen_at,
         "document_count_at_analysis": row.document_count,
-        "current_document_count": db.query(Document).count(),
+        "current_document_count": q_doc.count(),
     }
     return report
 
@@ -290,9 +305,9 @@ COPILOT_SYSTEM_PROMPT = (
 )
 
 
-def copilot_chat(db: Session, question: str) -> str:
+def copilot_chat(db: Session, question: str, user_id: int | None = None) -> str:
     cleaned_q = question.strip()
-    cache_key = cleaned_q.lower()
+    cache_key = f"{user_id or 0}:{cleaned_q.lower()}"
     now = time.time()
 
     # Instant response on repeated / recent query
@@ -324,14 +339,14 @@ def copilot_chat(db: Session, question: str) -> str:
 
             use_web_search = any(k in q_lower for k in ["web", "google", "search web", "live search", "online search", "niche"])
             if use_web_search:
-                retrieved_hacks = hackathons.web_search_hackathons_live(db, query=search_term or "AI Hackathon 2026", limit=3)
+                retrieved_hacks = hackathons.web_search_hackathons_live(db, query=search_term or "AI Hackathon 2026", limit=3, user_id=user_id)
             elif "best" in q_lower or "for me" in q_lower or "recommend" in q_lower or not search_term:
-                retrieved_hacks = hackathons.get_recommended_hackathons(db, limit=3)
+                retrieved_hacks = hackathons.get_recommended_hackathons(db, limit=3, user_id=user_id)
             else:
-                retrieved_hacks = hackathons.search_hackathons(db, mode=mode_filter, search=search_term, limit=3)
+                retrieved_hacks = hackathons.search_hackathons(db, mode=mode_filter, search=search_term, limit=3, user_id=user_id)
 
             if not retrieved_hacks:
-                retrieved_hacks = hackathons.get_recommended_hackathons(db, limit=3)
+                retrieved_hacks = hackathons.get_recommended_hackathons(db, limit=3, user_id=user_id)
 
             lines = []
             for h in retrieved_hacks:
@@ -348,7 +363,7 @@ def copilot_chat(db: Session, question: str) -> str:
     if is_skills_trend:
         try:
             import skills_research
-            intel = skills_research.get_trending_skills_intelligence(db)
+            intel = skills_research.get_trending_skills_intelligence(db, user_id=user_id)
             lines = ["TODAY'S IN-DEMAND SKILLS FROM LIVE WEB RESEARCH:"]
             for t in intel.get("trending_skills", [])[:5]:
                 lines.append(f"- {t['name']} ({t['category']}): {t['demand']} | Citation: \"{t['sample_headline']}\"")
@@ -365,7 +380,7 @@ def copilot_chat(db: Session, question: str) -> str:
     if is_resume:
         try:
             import resume
-            r_data = resume.build_initial_resume_data(db)
+            r_data = resume.build_initial_resume_data(db, user_id=user_id)
             resume_context = (
                 f"- Candidate Name: {r_data.get('personal', {}).get('name')}\n"
                 f"- Education: {json.dumps(r_data.get('education', []))}\n"
@@ -379,7 +394,7 @@ def copilot_chat(db: Session, question: str) -> str:
             print(f"[career/copilot] Error fetching resume context: {ex}")
 
     try:
-        profile = _build_profile_context(db)
+        profile = _build_profile_context(db, user_id=user_id)
         prompt_extras = ""
         if is_hackathon and hackathons_context:
             prompt_extras += f"\n\nVERIFIED REAL UPCOMING HACKATHONS (NEVER INVENT ANY OTHER EVENTS, INCLUDE OFFICIAL LINKS):\n{hackathons_context}"
@@ -402,7 +417,10 @@ def copilot_chat(db: Session, question: str) -> str:
         _copilot_cache[cache_key] = (now, answer)
         return answer
     except Exception as e:
-        docs = db.query(Document).all()
+        q_doc = db.query(Document)
+        if user_id is not None:
+            q_doc = q_doc.filter(Document.user_id == user_id)
+        docs = q_doc.all()
         skills = sorted({s.name for d in docs for s in d.skills})
         skill_str = ', '.join(skills[:6]) if skills else 'no skills tagged yet'
         primary = skills[0] if skills else 'core technical skills'
@@ -479,9 +497,9 @@ Shape:
 }"""
 
 
-def match_job_description(db: Session, job_description: str) -> dict:
+def match_job_description(db: Session, job_description: str, user_id: int | None = None) -> dict:
     cleaned_jd = job_description.strip()
-    cache_key = cleaned_jd[:300].lower()
+    cache_key = f"{user_id or 0}:{cleaned_jd[:300].lower()}"
     now = time.time()
 
     if cache_key in _job_cache:
@@ -490,14 +508,17 @@ def match_job_description(db: Session, job_description: str) -> dict:
             return cached_res
 
     try:
-        profile = _build_profile_context(db)
+        profile = _build_profile_context(db, user_id=user_id)
         user_message = f"STUDENT IDENTITY:\n{profile}\n\nJOB DESCRIPTION:\n{cleaned_jd}"
         raw = _call_nvidia(JOB_MATCH_SYSTEM_PROMPT, user_message, max_tokens=400)
         res = _extract_json(raw)
         _job_cache[cache_key] = (now, res)
         return res
     except Exception:
-        docs = db.query(Document).all()
+        q_doc = db.query(Document)
+        if user_id is not None:
+            q_doc = q_doc.filter(Document.user_id == user_id)
+        docs = q_doc.all()
         all_skills = list({s.name for d in docs for s in d.skills}) or ["Python", "Problem Solving"]
         jd_lower = cleaned_jd.lower()
         matched = [s for s in all_skills if s.lower() in jd_lower]

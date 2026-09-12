@@ -578,15 +578,25 @@ MATCH_WEIGHTS = {
 }
 
 
-def get_user_identity_context(db: Session) -> Dict[str, Any]:
+def get_user_identity_context(db: Session, user_id: int | None = None) -> Dict[str, Any]:
     """Retrieve verified skills and project themes from the user's digital identity."""
-    from models import Document, Skill
+    from models import Document
 
-    user_skills = [s.name for s in db.query(Skill).all()]
-    projects = db.query(Document).filter(Document.category == "Project").all()
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    all_docs = q_doc.all()
+
+    skills_set = set()
+    for d in all_docs:
+        for s in d.skills:
+            skills_set.add(s.name)
+    user_skills = sorted(skills_set)
+
+    projects = [d for d in all_docs if d.category == "Project"]
     project_titles = [p.title or p.original_filename for p in projects]
     project_texts = " ".join(p.extracted_text or "" for p in projects)
-    certifications = [c.title or c.original_filename for c in db.query(Document).filter(Document.category == "Certification").all()]
+    certifications = [c.title or c.original_filename for c in all_docs if c.category == "Certification"]
 
     return {
         "skills": user_skills,
@@ -709,10 +719,10 @@ def calculate_match(hackathon: Dict[str, Any], user_ctx: Dict[str, Any]) -> Dict
 
 
 
-def get_recommended_hackathons(db: Session, limit: int = 5) -> List[Dict[str, Any]]:
+def get_recommended_hackathons(db: Session, limit: int = 5, user_id: int | None = None) -> List[Dict[str, Any]]:
     """Return top recommended hackathons for the user ordered by match score."""
     hackathons = fetch_all_hackathons()
-    user_ctx = get_user_identity_context(db)
+    user_ctx = get_user_identity_context(db, user_id=user_id)
 
     ranked = []
     for h in hackathons:
@@ -735,10 +745,11 @@ def search_hackathons(
     technology: Optional[str] = None,
     sort: Optional[str] = "best_match",
     limit: int = 50,
+    user_id: int | None = None,
 ) -> List[Dict[str, Any]]:
     """Filter, match, and sort hackathons for the global explorer."""
     hackathons = fetch_all_hackathons()
-    user_ctx = get_user_identity_context(db)
+    user_ctx = get_user_identity_context(db, user_id=user_id)
 
     results = []
     for h in hackathons:
@@ -801,12 +812,12 @@ def search_hackathons(
     return results[:limit]
 
 
-def web_search_hackathons_live(db: Session, query: str = "", limit: int = 30) -> List[Dict[str, Any]]:
+def web_search_hackathons_live(db: Session, query: str = "", limit: int = 30, user_id: int | None = None) -> List[Dict[str, Any]]:
     """Perform on-demand live web search for hackathons matching any custom query."""
     provider = WebSearchHackathonProvider(default_query=query or "AI technology")
     raw_results = provider.fetch_hackathons(query=query)
 
-    user_ctx = get_user_identity_context(db)
+    user_ctx = get_user_identity_context(db, user_id=user_id)
     scored_results = []
     for h in raw_results:
         _calculate_deadline_intel(h)

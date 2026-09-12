@@ -31,7 +31,7 @@ from vectorstore import store, embedding_text_for
 import career
 from career import CareerEngineError
 import auth
-from auth import AuthError
+from auth import AuthError, get_current_user
 import news
 import llm
 import hackathons
@@ -60,7 +60,7 @@ def health_check():
     return {"status": "ok"}
 
 
-def _seed_file(filepath: str, original_filename: str, db: Session):
+def _seed_file(filepath: str, original_filename: str, db: Session, user_id: Optional[int] = None):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     file_ext = os.path.splitext(original_filename)[1]
     stored_name = f"{uuid.uuid4().hex}{file_ext}"
@@ -84,6 +84,7 @@ def _seed_file(filepath: str, original_filename: str, db: Session):
         extracted_text=text,
         doc_date=date_guess,
         summary=summary,
+        user_id=user_id,
     )
     db.add(doc)
     db.flush()
@@ -95,11 +96,39 @@ def _seed_file(filepath: str, original_filename: str, db: Session):
 
 
 @app.on_event("startup")
-def auto_seed_if_empty():
+def startup_init():
     db = next(get_db())
     try:
-        if db.query(Document).count() == 0:
-            print("[startup] Database is empty. Ingesting sample data...")
+        # 1. Ensure demo user exists
+        demo_clerk_id = "user_demo_ledger_2026"
+        demo_user = db.query(User).filter(User.clerk_user_id == demo_clerk_id).first()
+        now = datetime.utcnow()
+        if not demo_user:
+            demo_user = User(
+                clerk_user_id=demo_clerk_id,
+                email="demo@ledger.ai",
+                name="Harshan Seliyan",
+                image_url="https://ui-avatars.com/api/?name=Harshan+Seliyan&background=d2a24a&color=0B0E13",
+                created_at=now,
+                last_login_at=now,
+                login_count=1,
+            )
+            db.add(demo_user)
+            db.commit()
+            db.refresh(demo_user)
+
+        # 2. Migrate any legacy unowned documents to demo account
+        unowned_docs = db.query(Document).filter(Document.user_id.is_(None)).all()
+        if unowned_docs:
+            print(f"[startup] Assigning {len(unowned_docs)} legacy unowned documents to demo user (id={demo_user.id})")
+            for d in unowned_docs:
+                d.user_id = demo_user.id
+            db.commit()
+
+        # 3. Seed demo user if demo user has no documents
+        demo_docs_count = db.query(Document).filter(Document.user_id == demo_user.id).count()
+        if demo_docs_count == 0:
+            print("[startup] Demo user has 0 documents. Ingesting sample data for demo user...")
             possible_sample_dirs = [
                 os.path.join(BASE_DIR, "sample_data"),
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_data"),
@@ -112,15 +141,16 @@ def auto_seed_if_empty():
                     sample_dir = _d
                     break
             if sample_dir and os.path.exists(sample_dir):
-                for filename in os.listdir(sample_dir):
+                for filename in sorted(os.listdir(sample_dir)):
                     filepath = os.path.join(sample_dir, filename)
                     if os.path.isfile(filepath) and not filename.startswith("."):
                         try:
-                            doc = _seed_file(filepath, filename, db)
-                            print(f"[startup] Seeded {filename} -> {doc.category}")
+                            doc = _seed_file(filepath, filename, db, user_id=demo_user.id)
+                            print(f"[startup] Seeded {filename} -> {doc.category} for demo user")
                         except Exception as ex:
                             print(f"[startup] Failed to seed {filename}: {ex}")
-            _refresh_derived_state(db)
+
+        _refresh_derived_state(db)
     finally:
         db.close()
 
@@ -255,21 +285,22 @@ def demo_login(db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    # Ensure sample documents are loaded if database is empty
-    if db.query(Document).count() == 0:
+    # Ensure sample documents are loaded if demo user has no documents
+    demo_docs_count = db.query(Document).filter(Document.user_id == user.id).count()
+    if demo_docs_count == 0:
         sample_dir = os.path.join(BASE_DIR, "sample_data")
         if os.path.exists(sample_dir):
             for filename in sorted(os.listdir(sample_dir)):
                 filepath = os.path.join(sample_dir, filename)
                 if os.path.isfile(filepath) and not filename.startswith("."):
                     try:
-                        _seed_file(filepath, filename, db)
+                        _seed_file(filepath, filename, db, user_id=user.id)
                     except Exception as ex:
                         print(f"[demo] Failed to seed {filename}: {ex}")
-        _refresh_derived_state(db)
+        _refresh_derived_state(db, user_id=user.id)
 
-    doc_count = db.query(Document).count()
-    skill_count = db.query(Skill).count()
+    doc_count = db.query(Document).filter(Document.user_id == user.id).count()
+    skill_count = len(news.get_user_skills(db, user.id))
 
     return {
         "id": user.id,
@@ -286,18 +317,64 @@ def demo_login(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/user/me")
+def get_current_user_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Retrieve profile and stats for the currently authenticated user."""
+    doc_count = db.query(Document).filter(Document.user_id == current_user.id).count()
+    return {
+        "id": current_user.id,
+        "clerk_user_id": current_user.clerk_user_id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "image_url": current_user.image_url,
+        "document_count": doc_count,
+        "last_login_at": current_user.last_login_at.isoformat() if current_user.last_login_at else None,
+        "login_count": current_user.login_count,
+    }
+
+
+@app.post("/api/user/seed-sample-data")
+def user_seed_sample_data(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Allow any authenticated account to copy sample data into their personal archive."""
+    sample_dir = os.path.join(BASE_DIR, "sample_data")
+    seeded = 0
+    if os.path.exists(sample_dir):
+        for filename in sorted(os.listdir(sample_dir)):
+            filepath = os.path.join(sample_dir, filename)
+            if os.path.isfile(filepath) and not filename.startswith("."):
+                try:
+                    _seed_file(filepath, filename, db, user_id=current_user.id)
+                    seeded += 1
+                except Exception as ex:
+                    print(f"[user-seed] Failed to seed {filename}: {ex}")
+    _refresh_derived_state(db, user_id=current_user.id)
+    doc_count = db.query(Document).filter(Document.user_id == current_user.id).count()
+    return {
+        "status": "ok",
+        "seeded": seeded,
+        "document_count": doc_count,
+        "message": "Sample documents successfully added to your private archive."
+    }
+
+
 @app.post("/api/demo/reset-sample-data")
 def demo_reset_sample_data(db: Session = Depends(get_db)):
-    """Reset the database to clean sample data from sample_data/ directory."""
+    """Reset the demo user's account to clean sample data from sample_data/ directory."""
+    demo_clerk_id = "user_demo_ledger_2026"
+    demo_user = db.query(User).filter(User.clerk_user_id == demo_clerk_id).first()
+    if not demo_user:
+        raise HTTPException(404, "Demo user not found.")
     try:
-        from models import TimelineEvent, KnowledgeRelationship, document_skills, CareerAnalysis, SavedResume
-        db.query(TimelineEvent).delete()
-        db.query(KnowledgeRelationship).delete()
-        db.execute(document_skills.delete())
-        db.query(Document).delete()
-        db.query(Skill).delete()
-        db.query(CareerAnalysis).delete()
-        db.query(SavedResume).delete()
+        from models import TimelineEvent, KnowledgeRelationship, CareerAnalysis, SavedResume
+        db.query(TimelineEvent).filter(TimelineEvent.user_id == demo_user.id).delete()
+        db.query(KnowledgeRelationship).filter(KnowledgeRelationship.user_id == demo_user.id).delete()
+        db.query(CareerAnalysis).filter(CareerAnalysis.user_id == demo_user.id).delete()
+        db.query(SavedResume).filter(SavedResume.user_id == demo_clerk_id).delete()
+
+        demo_docs = db.query(Document).filter(Document.user_id == demo_user.id).all()
+        for doc in demo_docs:
+            doc.skills = []
+            db.delete(doc)
         db.commit()
 
         sample_dir = os.path.join(BASE_DIR, "sample_data")
@@ -307,29 +384,28 @@ def demo_reset_sample_data(db: Session = Depends(get_db)):
                 filepath = os.path.join(sample_dir, filename)
                 if os.path.isfile(filepath) and not filename.startswith("."):
                     try:
-                        _seed_file(filepath, filename, db)
+                        _seed_file(filepath, filename, db, user_id=demo_user.id)
                         seeded += 1
                     except Exception as ex:
                         print(f"[demo] Failed to seed {filename}: {ex}")
 
-        _refresh_derived_state(db)
-        doc_count = db.query(Document).count()
-        skill_count = db.query(Skill).count()
+        _refresh_derived_state(db, user_id=demo_user.id)
+        doc_count = db.query(Document).filter(Document.user_id == demo_user.id).count()
+        skill_count = len(set(s.name for d in db.query(Document).filter(Document.user_id == demo_user.id).all() for s in d.skills))
 
         return {
             "status": "ok",
             "seeded_files": seeded,
             "document_count": doc_count,
             "skills_count": skill_count,
-            "message": "Sample data reset and derived states refreshed."
+            "message": "Demo data reset and derived states refreshed."
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Failed to reset sample data: {e}")
 
 
-
-def _refresh_derived_state(db: Session):
+def _refresh_derived_state(db: Session, user_id: Optional[int] = None):
     """Rebuild the vector index, relationship graph, and timeline.
     Cheap at prototype scale; runs after every upload so retrieval is always fresh."""
     docs = db.query(Document).all()
@@ -338,8 +414,8 @@ def _refresh_derived_state(db: Session):
         for d in docs
     ]
     store.fit_corpus(corpus)
-    relationships.rebuild_relationships(db)
-    timeline_mod.rebuild_timeline(db)
+    relationships.rebuild_relationships(db, user_id=user_id)
+    timeline_mod.rebuild_timeline(db, user_id=user_id)
 
 
 def _get_or_create_skill(db: Session, name: str) -> Skill:
@@ -351,17 +427,12 @@ def _get_or_create_skill(db: Session, name: str) -> Skill:
     return skill
 
 
-@app.on_event("startup")
-def _startup():
-    db = next(get_db())
-    _refresh_derived_state(db)
-
-
 # ---------------------------------------------------------------- Module 1: Ingestion
 @app.post("/api/upload")
 async def upload_document(
     file: UploadFile = File(...),
     doc_date: str = Form(""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     try:
@@ -390,6 +461,7 @@ async def upload_document(
             extracted_text=text,
             doc_date=date_guess,
             summary=summary,
+            user_id=current_user.id,
         )
         db.add(doc)
         db.flush()
@@ -399,7 +471,7 @@ async def upload_document(
         db.commit()
         db.refresh(doc)
 
-        _refresh_derived_state(db)
+        _refresh_derived_state(db, user_id=current_user.id)
 
         return _serialize_doc(doc)
     except Exception as e:
@@ -413,6 +485,7 @@ async def upload_link(
     url: str = Form(...),
     label: str = Form(""),
     doc_date: str = Form(""),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """For portfolio / GitHub links that aren't files."""
@@ -425,45 +498,46 @@ async def upload_link(
         category=category, title=title, extracted_text=url,
         doc_date=doc_date, source_type="link", source_url=url,
         summary=f"[{category}] Linked resource: {url}",
+        user_id=current_user.id,
     )
     db.add(doc)
     db.commit()
     db.refresh(doc)
-    _refresh_derived_state(db)
+    _refresh_derived_state(db, user_id=current_user.id)
     return _serialize_doc(doc)
 
 
 # ---------------------------------------------------------------- Module 2: Categorized browsing
 @app.get("/api/documents")
-def list_documents(category: str | None = None, db: Session = Depends(get_db)):
-    q = db.query(Document)
+def list_documents(category: str | None = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    q = db.query(Document).filter(Document.user_id == current_user.id)
     if category:
         q = q.filter(Document.category == category)
     return [_serialize_doc(d) for d in q.order_by(Document.upload_date.desc()).all()]
 
 
 @app.get("/api/documents/{doc_id}")
-def get_document(doc_id: int, db: Session = Depends(get_db)):
-    doc = db.query(Document).get(doc_id)
+def get_document(doc_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
     if not doc:
         raise HTTPException(404, "Document not found")
     return _serialize_doc(doc, include_text=True)
 
 
 @app.get("/api/documents/{doc_id}/file")
-def get_document_file(doc_id: int, db: Session = Depends(get_db)):
-    doc = db.query(Document).get(doc_id)
+def get_document_file(doc_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
     if not doc or not doc.filepath or not os.path.exists(doc.filepath):
         raise HTTPException(404, "Original file not available")
     return FileResponse(doc.filepath, filename=doc.original_filename)
 
 
 @app.delete("/api/documents/{doc_id}")
-def delete_document(doc_id: int, db: Session = Depends(get_db)):
+def delete_document(doc_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Remove a document: deletes the stored file from disk (if any) and the
     database record, then rebuilds the derived state (search index, graph,
     timeline) so the removal is reflected everywhere immediately."""
-    doc = db.query(Document).get(doc_id)
+    doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
     if not doc:
         raise HTTPException(404, "Document not found")
 
@@ -477,13 +551,13 @@ def delete_document(doc_id: int, db: Session = Depends(get_db)):
     db.delete(doc)
     db.commit()
 
-    _refresh_derived_state(db)
+    _refresh_derived_state(db, user_id=current_user.id)
     return {"deleted": True, "id": doc_id}
 
 
 @app.get("/api/categories")
-def category_counts(db: Session = Depends(get_db)):
-    docs = db.query(Document).all()
+def category_counts(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    docs = db.query(Document).filter(Document.user_id == current_user.id).all()
     counts: dict[str, int] = {}
     for d in docs:
         counts[d.category] = counts.get(d.category, 0) + 1
@@ -492,29 +566,37 @@ def category_counts(db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------- Module 3: Relationship graph
 @app.get("/api/graph")
-def graph(db: Session = Depends(get_db)):
-    return relationships.get_graph(db)
+def graph(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return relationships.get_graph(db, user_id=current_user.id)
 
 
 @app.get("/api/skills")
-def skills(db: Session = Depends(get_db)):
-    return [{"id": s.id, "name": s.name, "document_count": len(s.documents)}
-            for s in db.query(Skill).all()]
+def skills(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_docs = db.query(Document).filter(Document.user_id == current_user.id).all()
+    counts: dict[int, dict] = {}
+    for d in user_docs:
+        for s in d.skills:
+            if s.id not in counts:
+                counts[s.id] = {"id": s.id, "name": s.name, "document_count": 0}
+            counts[s.id]["document_count"] += 1
+    return sorted(list(counts.values()), key=lambda x: -x["document_count"])
 
 
 # ---------------------------------------------------------------- Module 4: Timeline
 @app.get("/api/timeline")
-def timeline_endpoint(db: Session = Depends(get_db)):
-    return timeline_mod.get_timeline(db)
+def timeline_endpoint(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return timeline_mod.get_timeline(db, user_id=current_user.id)
 
 
 # ---------------------------------------------------------------- Module 5: Smart retrieval
 @app.get("/api/search")
-def search(q: str, db: Session = Depends(get_db)):
-    results = store.search(q, top_k=10)
+def search(q: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_docs = db.query(Document).filter(Document.user_id == current_user.id).all()
+    allowed_ids = [d.id for d in user_docs]
+    results = store.search(q, top_k=10, allowed_ids=allowed_ids)
     out = []
     for doc_id, score in results:
-        doc = db.query(Document).get(doc_id)
+        doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
         if doc:
             out.append({**_serialize_doc(doc), "relevance": round(score, 3)})
     return out
@@ -544,8 +626,8 @@ def _serialize_doc(doc: Document, include_text: bool = False) -> dict:
 
 # ---------------------------------------------------------------- Identity Profile
 @app.get("/api/identity")
-def identity_profile(db: Session = Depends(get_db)):
-    documents = db.query(Document).all()
+def identity_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    documents = db.query(Document).filter(Document.user_id == current_user.id).all()
     # Statistics
     total_documents = len(documents)
     cat_counts = {}
@@ -617,7 +699,7 @@ def identity_profile(db: Session = Depends(get_db)):
         "total_achievements": len(achievements),
     }
 
-    connections = relationships.get_graph(db)
+    connections = relationships.get_graph(db, user_id=current_user.id)
 
     return {
         "summary": summary,
@@ -635,8 +717,8 @@ def identity_profile(db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------- Dashboard Aggregator
 @app.get("/api/dashboard")
-def dashboard_data(db: Session = Depends(get_db)):
-    documents = db.query(Document).all()
+def dashboard_data(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    documents = db.query(Document).filter(Document.user_id == current_user.id).all()
     # Stats
     total_documents = len(documents)
     skill_doc_counts = {}
@@ -650,7 +732,7 @@ def dashboard_data(db: Session = Depends(get_db)):
     achievements = [d for d in documents if d.category == "Achievement"]
     education = [d for d in documents if d.category == "Academic"]
     # Relationships summary
-    graph = relationships.get_graph(db)
+    graph = relationships.get_graph(db, user_id=current_user.id)
     rel_count = len(graph.get("edges", []))
     # Recent docs
     recent_docs = sorted(documents, key=lambda d: d.upload_date or d.doc_date or "", reverse=True)[:5]
@@ -704,7 +786,7 @@ def dashboard_data(db: Session = Depends(get_db)):
         },
         "skills_by_category": skills_by_category,
         "recent_documents": recent_serialized,
-        "timeline": timeline_mod.get_timeline(db),
+        "timeline": timeline_mod.get_timeline(db, user_id=current_user.id),
         "graph_summary": {
             "nodes": len(graph.get("nodes", [])),
             "edges": rel_count
@@ -716,44 +798,44 @@ def dashboard_data(db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------- Career Intelligence Engine
 @app.post("/api/career/analyze")
-def career_analyze(db: Session = Depends(get_db)):
+def career_analyze(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        return career.run_career_analysis(db)
+        return career.run_career_analysis(db, user_id=current_user.id)
     except CareerEngineError as e:
         raise HTTPException(400, str(e))
 
 
 @app.get("/api/career/profile")
-def career_profile(db: Session = Depends(get_db)):
-    report = career.get_latest_analysis(db)
+def career_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    report = career.get_latest_analysis(db, user_id=current_user.id)
     if not report:
         raise HTTPException(404, "No career analysis yet. Run one from the Career tab.")
     return report
 
 
 @app.post("/api/career/copilot")
-def career_copilot(question: str = Form(...), db: Session = Depends(get_db)):
+def career_copilot(question: str = Form(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        answer = career.copilot_chat(db, question)
+        answer = career.copilot_chat(db, question, user_id=current_user.id)
         return {"answer": answer}
     except CareerEngineError as e:
         raise HTTPException(400, str(e))
 
 
 @app.post("/api/career/job-match")
-def career_job_match(job_description: str = Form(...), db: Session = Depends(get_db)):
+def career_job_match(job_description: str = Form(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        return career.match_job_description(db, job_description)
+        return career.match_job_description(db, job_description, user_id=current_user.id)
     except CareerEngineError as e:
         raise HTTPException(400, str(e))
 
 
 # ---------------------------------------------------------------- World Tech News
 @app.get("/api/news")
-def get_news(category: str = "All", search: str = "", db: Session = Depends(get_db)):
+def get_news(category: str = "All", search: str = "", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         articles = news.fetch_news(category=category if category != "All" else None, search=search or None, limit=60)
-        user_skills = news.get_user_skills(db)
+        user_skills = news.get_user_skills(db, user_id=current_user.id)
         articles = news.personalize_articles(articles, user_skills)
         # Transform to frontend expected shape
         out_articles = []
@@ -808,6 +890,7 @@ def get_hackathons(
     technology: str = "All",
     sort: str = "best_match",
     limit: int = 50,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
@@ -820,6 +903,7 @@ def get_hackathons(
             technology=technology if technology != "All" else None,
             sort=sort,
             limit=limit,
+            user_id=current_user.id,
         )
         cache_info = hackathons.get_cache_info()
         return {
@@ -839,11 +923,11 @@ def get_hackathons(
 
 
 @app.get("/api/hackathons/recommended")
-def get_recommended_hackathons_endpoint(limit: int = 5, db: Session = Depends(get_db)):
+def get_recommended_hackathons_endpoint(limit: int = 5, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        recs = hackathons.get_recommended_hackathons(db=db, limit=limit)
+        recs = hackathons.get_recommended_hackathons(db=db, limit=limit, user_id=current_user.id)
         cache_info = hackathons.get_cache_info()
-        user_ctx = hackathons.get_user_identity_context(db)
+        user_ctx = hackathons.get_user_identity_context(db, user_id=current_user.id)
         return {
             "hackathons": recs,
             "total": len(recs),
@@ -873,10 +957,10 @@ def refresh_hackathons(db: Session = Depends(get_db)):
 
 
 @app.get("/api/hackathons/web-search")
-def web_search_hackathons_endpoint(q: str = "", limit: int = 30, db: Session = Depends(get_db)):
+def web_search_hackathons_endpoint(q: str = "", limit: int = 30, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Live on-demand web search for hackathons matching any custom query across Google indexes."""
     try:
-        results = hackathons.web_search_hackathons_live(db=db, query=q, limit=limit)
+        results = hackathons.web_search_hackathons_live(db=db, query=q, limit=limit, user_id=current_user.id)
         return {
             "hackathons": results,
             "total": len(results),
@@ -894,10 +978,10 @@ def web_search_hackathons_endpoint(q: str = "", limit: int = 30, db: Session = D
 
 
 @app.get("/api/skills/trending-today")
-def get_trending_skills_today_endpoint(db: Session = Depends(get_db)):
+def get_trending_skills_today_endpoint(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Live web-researched trending tech skills and personal identity alignment."""
     try:
-        data = skills_research.get_trending_skills_intelligence(db=db)
+        data = skills_research.get_trending_skills_intelligence(db=db, user_id=current_user.id)
         return data
     except Exception as e:
         return {
@@ -950,6 +1034,7 @@ class ResumeGenerateRequest(BaseModel):
 def get_resume_data(
     target: str = "General",
     template: str = "minimal_professional",
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -957,8 +1042,8 @@ def get_resume_data(
     from their digital identity archive, along with available templates,
     target modes, and deep skill intelligence.
     """
-    data = resume.build_initial_resume_data(db, target=target, template=template)
-    skill_intel = resume.get_skill_intelligence(db)
+    data = resume.build_initial_resume_data(db, target=target, template=template, user_id=current_user.id, clerk_user_id=current_user.clerk_user_id)
+    skill_intel = resume.get_skill_intelligence(db, user_id=current_user.id)
     quality = resume.analyze_resume_quality(data)
     return {
         "resume": data,
@@ -989,12 +1074,10 @@ def preview_resume(req: ResumeGenerateRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/resume/save")
-def save_resume_endpoint(req: ResumeSaveRequest, request: Request, db: Session = Depends(get_db)):
+def save_resume_endpoint(req: ResumeSaveRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Saves the user's edited resume configuration and custom tweaks."""
-    claims = getattr(request.state, "user_claims", None)
-    user_id = claims.get("sub", "default") if claims else "default"
-    
-    saved = db.query(SavedResume).filter(SavedResume.user_id == user_id).first()
+    user_key = current_user.clerk_user_id or str(current_user.id)
+    saved = db.query(SavedResume).filter(SavedResume.user_id == user_key).first()
     json_str = json.dumps(req.resume_data)
     now = datetime.utcnow()
     target_mode = req.target or req.resume_data.get("target", "General")
@@ -1002,7 +1085,7 @@ def save_resume_endpoint(req: ResumeSaveRequest, request: Request, db: Session =
     
     if not saved:
         saved = SavedResume(
-            user_id=user_id,
+            user_id=user_key,
             target=target_mode,
             template=template_id,
             resume_data=json_str,
@@ -1050,6 +1133,7 @@ def generate_resume_endpoint(req: ResumeGenerateRequest):
 def download_resume_get(
     target: str = "General",
     template: str = "minimal_professional",
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1057,7 +1141,8 @@ def download_resume_get(
     Generates authentic PDF directly for browser download or navigation.
     """
     try:
-        draft = db.query(SavedResume).order_by(SavedResume.updated_at.desc()).first()
+        user_key = current_user.clerk_user_id or str(current_user.id)
+        draft = db.query(SavedResume).filter(SavedResume.user_id == user_key).order_by(SavedResume.updated_at.desc()).first()
         if draft and draft.resume_data:
             try:
                 resume_data = json.loads(draft.resume_data)
@@ -1066,9 +1151,9 @@ def download_resume_get(
                 if target:
                     resume_data["target"] = target
             except Exception:
-                resume_data = resume.build_initial_resume_data(db, target=target, template=template)
+                resume_data = resume.build_initial_resume_data(db, target=target, template=template, user_id=current_user.id, clerk_user_id=current_user.clerk_user_id)
         else:
-            resume_data = resume.build_initial_resume_data(db, target=target, template=template)
+            resume_data = resume.build_initial_resume_data(db, target=target, template=template, user_id=current_user.id, clerk_user_id=current_user.clerk_user_id)
 
         pdf_bytes = resume_pdf.generate_resume_pdf(resume_data)
         candidate_name = resume_data.get("personal", {}).get("name", "Resume").strip() or "Resume"

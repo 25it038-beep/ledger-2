@@ -29,6 +29,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     filename = Column(String, nullable=False)          # stored filename on disk
     original_filename = Column(String, nullable=False)  # user-facing filename
     filepath = Column(String, nullable=False)          # path on disk, original file preserved as-is
@@ -43,6 +44,7 @@ class Document(Base):
     summary = Column(Text, nullable=True)                 # short auto-generated summary
 
     skills = relationship("Skill", secondary=document_skills, back_populates="documents")
+    user = relationship("User", back_populates="documents")
 
 
 class Skill(Base):
@@ -64,6 +66,7 @@ class KnowledgeRelationship(Base):
     __tablename__ = "relationships"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     source_type = Column(String)   # "document" | "skill"
     source_id = Column(Integer)
     target_type = Column(String)
@@ -76,6 +79,7 @@ class TimelineEvent(Base):
     __tablename__ = "timeline_events"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"))
     year = Column(String)          # e.g. "2023"
     label = Column(String)          # short label, e.g. "Python Certification"
@@ -100,6 +104,8 @@ class User(Base):
     last_login_at = Column(DateTime, default=datetime.utcnow)
     login_count = Column(Integer, default=1)
 
+    documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
+
 
 class CareerAnalysis(Base):
     """
@@ -110,6 +116,7 @@ class CareerAnalysis(Base):
     __tablename__ = "career_analysis"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     generated_at = Column(DateTime, default=datetime.utcnow)
     document_count = Column(Integer, default=0)   # snapshot of corpus size used, to detect staleness
     report_json = Column(Text)                     # full structured report, stored as JSON text

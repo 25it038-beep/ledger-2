@@ -178,7 +178,7 @@ def fetch_trending_skills_web(force_refresh: bool = False) -> List[Dict[str, Any
     return scored
 
 
-def get_trending_skills_intelligence(db: Session) -> Dict[str, Any]:
+def get_trending_skills_intelligence(db: Session, user_id: int | None = None) -> Dict[str, Any]:
     """
     Correlate live web-researched trending skills with user's verified identity.
     Returns:
@@ -187,12 +187,19 @@ def get_trending_skills_intelligence(db: Session) -> Dict[str, Any]:
       - upskill_recommendations: top skills to learn next with rationale
       - last_researched: ISO timestamp
     """
-    from models import Skill
+    from models import Document
 
     trending = fetch_trending_skills_web()
     
     # User's verified skills
-    user_skills = [s.name for s in db.query(Skill).all()]
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    skills_set = set()
+    for d in q_doc.all():
+        for s in d.skills:
+            skills_set.add(s.name)
+    user_skills = sorted(skills_set)
 
     verified_matches = []
     upskill_recommendations = []

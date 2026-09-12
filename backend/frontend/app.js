@@ -3,7 +3,9 @@ const API = "/api";
 // ---------------------------------------------------------------- Clerk authentication
 let clerk = null; // the Clerk instance, once loaded
 const CACHED_USER_KEY = "ledger.cachedUser"; // "login info save" — last-known profile, for instant display on reload
+const USER_CACHE_KEY = CACHED_USER_KEY; // alias for compatibility
 const DEMO_TOKEN_KEY = "ledger.demoToken";
+let currentAuthMode = "signIn"; // "signIn" or "signUp"
 
 function getCachedUser() {
   try { return JSON.parse(localStorage.getItem(CACHED_USER_KEY) || "null"); }
@@ -37,15 +39,40 @@ async function apiFetch(url, options = {}) {
       if (token) headers.set("Authorization", `Bearer ${token}`);
     } catch { /* no active session yet */ }
   } else {
-    const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
+    const demoToken = localStorage.getItem(DEMO_TOKEN_KEY) || sessionStorage.getItem(DEMO_TOKEN_KEY);
     if (demoToken) headers.set("Authorization", `Bearer ${demoToken}`);
   }
   return fetch(url, { ...options, headers });
 }
 window.apiFetch = apiFetch;
 
+async function loadSampleStarterData(btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Loading sample data...";
+  }
+  try {
+    const res = await apiFetch(`${API}/user/seed-sample-data`, { method: "POST" });
+    const data = await res.json();
+    showToast(data.message || "Sample portfolio loaded into your archive.");
+    await loadDashboard();
+    await refreshTotal();
+    await renderCategories();
+    await renderDocs(activeCategory);
+  } catch (err) {
+    showToast("Error loading sample data: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Load Sample Data";
+    }
+  }
+}
+window.loadSampleStarterData = loadSampleStarterData;
+
 function showCachedUserBadge() {
-  document.getElementById("user-badge").style.display = "flex";
+  const userBadgeEl = document.getElementById("user-badge");
+  if (userBadgeEl) userBadgeEl.style.display = "flex";
   const cached = getCachedUser();
   let name = "Account";
   let image = "https://ui-avatars.com/api/?name=User&background=cba135&color=fff";
@@ -93,7 +120,24 @@ function showCachedUserBadge() {
   if (switchToClerkBtn) switchToClerkBtn.style.display = isDemo ? "inline-flex" : "none";
   if (topbarSignoutBtn) topbarSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign Out";
   if (sidebarSignoutBtn) sidebarSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign Out";
-  if (headerSignoutBtn) headerSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign out";
+  if (headerSignoutBtn) headerSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign Out";
+
+  // Mount Clerk UserButton if active Clerk user and not demo
+  const topbarUserBtn = document.getElementById("clerk-user-button-topbar");
+  const sidebarUserBtn = document.getElementById("clerk-user-button-sidebar");
+  if (!isDemo && clerk && clerk.user && typeof clerk.mountUserButton === "function") {
+    if (topbarUserBtn && !topbarUserBtn.children.length) {
+      topbarUserBtn.style.display = "inline-block";
+      try { clerk.mountUserButton(topbarUserBtn); } catch (e) { console.warn("mountUserButton topbar:", e); }
+    }
+    if (sidebarUserBtn && !sidebarUserBtn.children.length) {
+      sidebarUserBtn.style.display = "inline-block";
+      try { clerk.mountUserButton(sidebarUserBtn); } catch (e) { console.warn("mountUserButton sidebar:", e); }
+    }
+  } else {
+    if (topbarUserBtn) topbarUserBtn.style.display = "none";
+    if (sidebarUserBtn) sidebarUserBtn.style.display = "none";
+  }
 }
 
 async function loginAsDemoAccount() {
@@ -101,11 +145,11 @@ async function loginAsDemoAccount() {
   const topBtn = document.getElementById("demo-login-btn-top");
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "⏳ Initializing Demo Account & Sample Data...";
+    btn.textContent = "Initializing Demo Account and Sample Data...";
   }
   if (topBtn) {
     topBtn.disabled = true;
-    topBtn.textContent = "⏳ Initializing Demo Account...";
+    topBtn.textContent = "Initializing Demo Account...";
   }
   try {
     const res = await fetch(`${API}/auth/demo-login`, { method: "POST" });
@@ -116,7 +160,7 @@ async function loginAsDemoAccount() {
       setCachedUser(data);
       showApp();
       initApp();
-      showToast("🚀 Logged in as Demo Account with preloaded sample data!");
+      showToast("Logged in as Demo Account with preloaded sample data.");
     }
   } catch (err) {
     console.error("Demo login error:", err);
@@ -124,11 +168,11 @@ async function loginAsDemoAccount() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "🚀 Continue with Demo Account (Preloaded Data)";
+      btn.textContent = "Continue as Guest (Demo Account)";
     }
     if (topBtn) {
       topBtn.disabled = false;
-      topBtn.textContent = "🚀 Instant Access: Continue with Demo Account";
+      topBtn.textContent = "Continue as Guest (Demo Account)";
     }
   }
 }
@@ -137,13 +181,13 @@ async function resetDemoSampleData() {
   const btn = document.getElementById("demo-reset-btn");
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "⟳ Resetting...";
+    btn.textContent = "Reloading...";
   }
   try {
     const res = await apiFetch(`${API}/demo/reset-sample-data`, { method: "POST" });
     const data = await res.json();
     if (data.status === "ok") {
-      showToast("✓ Clean sample data reloaded! Refreshing dashboard...");
+      showToast("Clean sample data reloaded. Refreshing dashboard...");
       await loadPremiumDashboard();
       if (typeof loadHackathons === "function") loadHackathons();
     }
@@ -152,7 +196,7 @@ async function resetDemoSampleData() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "⟳ Reload Sample Data";
+      btn.textContent = "Reload Sample Data";
     }
   }
 }
@@ -172,6 +216,86 @@ function showAuthGate() {
   if (shell) shell.style.display = "none";
 }
 
+function mountClerkAuth(mode = "signIn") {
+  if (!clerk) return;
+  const el = document.getElementById("clerk-sign-in");
+  if (!el) return;
+  el.innerHTML = "";
+  currentAuthMode = mode;
+
+  // Highlight active tab
+  const signInTab = document.getElementById("auth-mode-signin");
+  const signUpTab = document.getElementById("auth-mode-signup");
+  if (signInTab && signUpTab) {
+    if (mode === "signIn") {
+      signInTab.style.background = "rgba(210,162,74,0.18)";
+      signInTab.style.borderColor = "rgba(210,162,74,0.45)";
+      signInTab.style.color = "var(--accent-strong)";
+      signUpTab.style.background = "rgba(255,255,255,0.04)";
+      signUpTab.style.borderColor = "rgba(255,255,255,0.12)";
+      signUpTab.style.color = "var(--text-secondary)";
+    } else {
+      signUpTab.style.background = "rgba(210,162,74,0.18)";
+      signUpTab.style.borderColor = "rgba(210,162,74,0.45)";
+      signUpTab.style.color = "var(--accent-strong)";
+      signInTab.style.background = "rgba(255,255,255,0.04)";
+      signInTab.style.borderColor = "rgba(255,255,255,0.12)";
+      signInTab.style.color = "var(--text-secondary)";
+    }
+  }
+
+  const appearance = {
+    variables: {
+      colorPrimary: "#d2a24a",
+      colorBackground: "#131a23",
+      colorText: "#f0f2f5",
+      colorInputBackground: "#0b0e13",
+      colorInputText: "#f0f2f5",
+      borderRadius: "6px",
+    },
+    elements: {
+      card: {
+        boxShadow: "none",
+        background: "transparent",
+        border: "none",
+        padding: "0"
+      },
+      rootBox: {
+        width: "100%"
+      }
+    }
+  };
+
+  try {
+    if (mode === "signUp" && typeof clerk.mountSignUp === "function") {
+      clerk.mountSignUp(el, {
+        routing: "hash",
+        appearance,
+      });
+    } else {
+      clerk.mountSignIn(el, {
+        routing: "hash",
+        appearance,
+      });
+    }
+  } catch (err) {
+    console.warn("Clerk mount notice:", err);
+    el.innerHTML = `
+      <div style="background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.25);border-radius:10px;padding:16px;margin-bottom:16px;text-align:left;">
+        <div style="color:var(--accent);font-weight:600;font-size:13px;margin-bottom:6px;">
+          Clerk Authentication Notice
+        </div>
+        <div style="color:var(--text-secondary);font-size:12px;line-height:1.5;margin-bottom:14px;">
+          Clerk authentication is ready. You can sign in with your credentials or explore in Guest / Demo mode:
+        </div>
+        <button id="clerk-mount-demo-btn" class="primary demo-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">
+          Continue as Guest (Demo Account)
+        </button>
+      </div>
+    `;
+    document.getElementById("clerk-mount-demo-btn")?.addEventListener("click", loginAsDemoAccount);
+  }
+}
 
 async function initAuth() {
   document.getElementById("demo-login-btn")?.addEventListener("click", loginAsDemoAccount);
@@ -181,11 +305,15 @@ async function initAuth() {
   document.getElementById("sidebar-signout-btn")?.addEventListener("click", handleSignOut);
   document.getElementById("switch-to-clerk-btn")?.addEventListener("click", handleSignOut);
 
+  document.getElementById("auth-mode-signin")?.addEventListener("click", () => mountClerkAuth("signIn"));
+  document.getElementById("auth-mode-signup")?.addEventListener("click", () => mountClerkAuth("signUp"));
+
   const urlParams = new URLSearchParams(window.location.search);
   const forceAuth = urlParams.has("auth") || urlParams.has("login") || urlParams.has("signout") || urlParams.has("logout");
   if (forceAuth) {
     localStorage.removeItem(DEMO_TOKEN_KEY);
     sessionStorage.removeItem(DEMO_TOKEN_KEY);
+    localStorage.removeItem(CACHED_USER_KEY);
     localStorage.removeItem(USER_CACHE_KEY);
     sessionStorage.clear();
     setCachedUser(null);
@@ -213,14 +341,14 @@ async function initAuth() {
   try {
     config = await fetch(`${API}/auth/config`).then(r => r.json());
   } catch {
-    // Server unreachable — nothing we can do yet; keep the auth gate visible.
+    // Server unreachable — keep auth gate visible
     showAuthGate();
     return;
   }
 
   if (!config.authRequired || !config.publishableKey) {
-    // Clerk not configured on the server yet — skip the gate so the app stays usable.
-    document.getElementById("auth-setup-hint").style.display = "block";
+    const hint = document.getElementById("auth-setup-hint");
+    if (hint) hint.style.display = "block";
     showApp();
     initApp();
     return;
@@ -238,7 +366,7 @@ async function initAuth() {
       }
       script.setAttribute("data-clerk-publishable-key", config.publishableKey);
 
-      let attempts = 40;
+      let attempts = 50;
       const checkClerk = () => {
         if (window.Clerk) return resolve(window.Clerk);
         if (attempts-- <= 0) return reject(new Error("Clerk script load timeout"));
@@ -246,32 +374,33 @@ async function initAuth() {
       };
 
       if (!script.src) {
+        let clerkHost = "";
+        try {
+          const raw = config.publishableKey.split("_")[2] || "";
+          const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
+          clerkHost = atob(padded).replace(/\$$/, "");
+        } catch {}
+
+        const primaryUrl = clerkHost
+          ? `https://${clerkHost}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`
+          : "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+
         script.onload = () => checkClerk();
         script.onerror = () => {
           const fallback = document.createElement("script");
           fallback.crossOrigin = "anonymous";
           fallback.setAttribute("data-clerk-publishable-key", config.publishableKey);
-          fallback.src = "https://sharing-racer-5715.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+          fallback.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
           fallback.onload = () => checkClerk();
           fallback.onerror = (e) => reject(e);
           document.head.appendChild(fallback);
         };
-        script.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+        script.src = primaryUrl;
       } else {
         checkClerk();
       }
     });
   };
-
-  const clerkSignIn = document.getElementById("clerk-sign-in");
-  if (clerkSignIn && !clerkSignIn.children.length) {
-    clerkSignIn.innerHTML = `
-      <div id="clerk-loading-indicator" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:30px 10px; color:var(--text-secondary); text-align:center;">
-        <div style="width:26px; height:26px; border:2.5px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
-        <div style="font-size:12.5px; color:var(--text-secondary);">Connecting to Clerk authentication…</div>
-      </div>
-    `;
-  }
 
   try {
     clerk = await loadClerkScript();
@@ -280,17 +409,18 @@ async function initAuth() {
     }
   } catch (e) {
     console.warn("Clerk load notice:", e);
+    const clerkSignIn = document.getElementById("clerk-sign-in");
     if (clerkSignIn) {
       clerkSignIn.innerHTML = `
         <div style="background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.25);border-radius:10px;padding:16px;margin-bottom:16px;text-align:left;">
           <div style="color:var(--accent);font-weight:600;font-size:13px;margin-bottom:6px;">
-            ℹ️ Authentication Notice
+            Authentication Notice
           </div>
           <div style="color:var(--text-secondary);font-size:12px;line-height:1.5;margin-bottom:14px;">
-            Clerk development keys only accept requests from authorized domains. You can explore the platform live right now in Demo Mode with full preloaded data:
+            Clerk authentication is ready. You can test all features live using the preloaded Guest / Demo mode:
           </div>
           <button id="clerk-error-demo-btn" class="primary demo-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">
-            🚀 Enter Demo Mode (Preloaded Data)
+            Continue as Guest (Demo Account)
           </button>
         </div>
       `;
@@ -326,11 +456,11 @@ async function initAuth() {
         }
       } catch { /* non-fatal — user can still use the app */ }
     } else {
-      const demoToken = localStorage.getItem(DEMO_TOKEN_KEY);
+      const demoToken = sessionStorage.getItem(DEMO_TOKEN_KEY);
       if (!demoToken) {
         setCachedUser(null);
         showAuthGate();
-        mountSignIn();
+        mountClerkAuth(currentAuthMode || "signIn");
       }
     }
   };
@@ -338,7 +468,7 @@ async function initAuth() {
   clerk.addListener(onAuthChange);
   await onAuthChange();
 
-  // Active polling watcher to catch Clerk session updates in virtual mode or after redirect
+  // Active polling watcher to catch Clerk session updates in single page apps
   if (!window._clerkWatcherStarted) {
     window._clerkWatcherStarted = true;
     setInterval(async () => {
@@ -372,70 +502,10 @@ async function initAuth() {
   }
 }
 
-function mountSignIn() {
-  if (!clerk) return;
-  const el = document.getElementById("clerk-sign-in");
-  if (!el) return;
-  if (el.querySelector(".cl-card") || el.querySelector(".cl-rootBox")) return;
-  const loader = document.getElementById("clerk-loading-indicator");
-  if (loader) loader.remove();
-  try {
-    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    const currentOrigin = window.location.origin;
-    clerk.mountSignIn(el, {
-      routing: "virtual",
-      forceRedirectUrl: currentOrigin + "/",
-      fallbackRedirectUrl: currentOrigin + "/",
-      signUpForceRedirectUrl: currentOrigin + "/",
-      signUpFallbackRedirectUrl: currentOrigin + "/",
-      afterSignInUrl: currentOrigin + "/",
-      afterSignUpUrl: currentOrigin + "/",
-      redirectUrl: currentOrigin + "/",
-      appearance: {
-        variables: {
-          colorPrimary: "#d2a24a",
-          colorBackground: "#131a23",
-          colorText: "#f0f2f5",
-        },
-        elements: {
-          ...(!isLocalhost ? {
-            socialButtonsBlockButton: { display: "none" },
-            dividerRow: { display: "none" }
-          } : {}),
-          card: {
-            boxShadow: "none",
-            background: "transparent",
-            border: "none",
-            padding: "0"
-          },
-          rootBox: {
-            width: "100%"
-          }
-        }
-      }
-    });
-  } catch (err) {
-    console.warn("clerk.mountSignIn error:", err);
-    el.innerHTML = `
-      <div style="background:rgba(210,162,74,0.08);border:1px solid rgba(210,162,74,0.25);border-radius:10px;padding:16px;margin-bottom:16px;text-align:left;">
-        <div style="color:var(--accent);font-weight:600;font-size:13px;margin-bottom:6px;">
-          Clerk Authentication Notice
-        </div>
-        <div style="color:var(--text-secondary);font-size:12px;line-height:1.5;margin-bottom:14px;">
-          Clerk sign-in widget is restricted on this hosted domain. Explore all features with full preloaded data in Demo Mode:
-        </div>
-        <button id="clerk-mount-demo-btn" class="primary demo-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">
-          🚀 Enter Demo Mode (Preloaded Data)
-        </button>
-      </div>
-    `;
-    document.getElementById("clerk-mount-demo-btn")?.addEventListener("click", loginAsDemoAccount);
-  }
-}
-
 async function handleSignOut() {
   localStorage.removeItem(DEMO_TOKEN_KEY);
   sessionStorage.removeItem(DEMO_TOKEN_KEY);
+  localStorage.removeItem(CACHED_USER_KEY);
   localStorage.removeItem(USER_CACHE_KEY);
   sessionStorage.clear();
   setCachedUser(null);
@@ -444,7 +514,7 @@ async function handleSignOut() {
   }
   showToast("Signed out. Showing authentication portal...");
   showAuthGate();
-  if (clerk) mountSignIn();
+  if (clerk) mountClerkAuth("signIn");
 }
 
 document.getElementById("sign-out-btn")?.addEventListener("click", handleSignOut);
@@ -591,7 +661,23 @@ async function renderDocs(category) {
   const grid = document.getElementById("doc-grid");
   grid.innerHTML = "";
   if (!docs.length) {
-    grid.innerHTML = `<div class="empty-state">Nothing here yet — upload something in Ingest.</div>`;
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1/-1; padding: 48px 24px; text-align: center; background: rgba(20, 26, 35, 0.6); border: 1px dashed rgba(210,162,74,0.25); border-radius: 12px;">
+        <div style="font-size: 13px; font-family: var(--font-mono); color: var(--gold-bright); margin-bottom: 12px; letter-spacing: 1.5px; text-transform: uppercase;">[Archive Empty]</div>
+        <h3 style="color: #f0f2f5; font-size: 18px; margin: 0 0 8px 0; font-family: var(--font-display);">Your Archive is Clean and Private</h3>
+        <p style="color: #9aa3ad; font-size: 13px; max-width: 500px; margin: 0 auto 20px auto; line-height: 1.5;">
+          Every user account has its own isolated repository. Upload your certifications, projects, or resumes to build your identity, or load sample data to explore immediately.
+        </p>
+        <div style="display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+          <button class="primary" onclick="document.querySelector('[data-tab=\\'upload\\']').click()" style="padding: 9px 18px; font-size: 13px;">
+            Upload Credentials
+          </button>
+          <button style="padding: 9px 18px; font-size: 13px; border: 1px solid var(--gold-bright); background: rgba(210,162,74,0.12); color: var(--gold-bright); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); font-weight: 600;" onclick="loadSampleStarterData(this)">
+            Load Sample Data
+          </button>
+        </div>
+      </div>
+    `;
     return;
   }
   for (const d of docs) {
@@ -1324,7 +1410,29 @@ async function loadPremiumDashboard() {
   try {
     const data = await apiFetch(`${API}/dashboard`).then(r => r.json());
     const stats = data.stats || {};
+    const emptyBanner = (stats.total_documents || 0) === 0 ? `
+      <div class="user-onboarding-card" style="grid-column:1/-1;background:linear-gradient(135deg, rgba(210,162,74,0.14), rgba(27,33,44,0.85));border:1px solid rgba(210,162,74,0.35);border-radius:12px;padding:24px;margin-bottom:8px;box-shadow:0 8px 24px rgba(0,0,0,0.35);">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:11px;color:var(--gold-bright);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Private Digital Identity Archive</div>
+            <h3 style="margin:0 0 8px 0;color:#f0f2f5;font-size:20px;font-family:var(--font-display);">Welcome, ${escapeHtml(userName)}!</h3>
+            <p style="margin:0;color:#a0aab8;font-size:14px;max-width:640px;line-height:1.5;">
+              This account has its own isolated repository. Upload your certifications, projects, or resumes to build your identity, or load sample starter data to explore the AI features immediately.
+            </p>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+            <button class="primary" onclick="document.querySelector('[data-tab=\\'upload\\']').click()" style="padding:10px 20px;font-size:13px;cursor:pointer;">
+              Upload Your Credentials
+            </button>
+            <button style="padding:10px 20px;font-size:13px;border:1px solid var(--gold-bright);background:rgba(210,162,74,0.15);color:var(--gold-bright);border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-weight:600;" onclick="loadSampleStarterData(this)">
+              Load Sample Data
+            </button>
+          </div>
+        </div>
+      </div>
+    ` : '';
     const statsHtml = `
+      ${emptyBanner}
       <div class="card" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
         ${[
           {label:'Total Documents', value: stats.total_documents||0, action:'dashboard'},

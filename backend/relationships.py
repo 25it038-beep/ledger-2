@@ -18,15 +18,21 @@ from sqlalchemy.orm import Session
 from models import Document, Skill, KnowledgeRelationship
 
 
-def rebuild_relationships(db: Session):
-    db.query(KnowledgeRelationship).delete()
-    documents = db.query(Document).all()
+def rebuild_relationships(db: Session, user_id: int | None = None):
+    q_del = db.query(KnowledgeRelationship)
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_del = q_del.filter(KnowledgeRelationship.user_id == user_id)
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    q_del.delete()
+    documents = q_doc.all()
 
     # 1. Document <-> Skill edges
     for doc in documents:
         relation = "teaches" if doc.category == "Certification" else "mentions"
         for skill in doc.skills:
             db.add(KnowledgeRelationship(
+                user_id=doc.user_id,
                 source_type="document", source_id=doc.id,
                 target_type="skill", target_id=skill.id,
                 relation=relation,
@@ -41,6 +47,7 @@ def rebuild_relationships(db: Session):
             shared = proj_skill_ids & {s.id for s in source_doc.skills}
             for skill_id in shared:
                 db.add(KnowledgeRelationship(
+                    user_id=proj.user_id,
                     source_type="skill", source_id=skill_id,
                     target_type="document", target_id=proj.id,
                     relation="used_in",
@@ -54,6 +61,7 @@ def rebuild_relationships(db: Session):
             shared = proj_skill_ids & {s.id for s in intern.skills}
             if shared:
                 db.add(KnowledgeRelationship(
+                    user_id=proj.user_id,
                     source_type="document", source_id=proj.id,
                     target_type="document", target_id=intern.id,
                     relation="led_to",
@@ -68,6 +76,7 @@ def rebuild_relationships(db: Session):
             shared = intern_skill_ids & {s.id for s in ach.skills}
             if shared:
                 db.add(KnowledgeRelationship(
+                    user_id=intern.user_id,
                     source_type="document", source_id=intern.id,
                     target_type="document", target_id=ach.id,
                     relation="led_to",
@@ -77,11 +86,23 @@ def rebuild_relationships(db: Session):
     db.commit()
 
 
-def get_graph(db: Session) -> dict:
-    """Serialize the graph into {nodes, edges} for the frontend visualization."""
-    documents = {d.id: d for d in db.query(Document).all()}
-    skills = {s.id: s for s in db.query(Skill).all()}
-    edges = db.query(KnowledgeRelationship).all()
+def get_graph(db: Session, user_id: int | None = None) -> dict:
+    """Serialize the graph into {nodes, edges} scoped to a user."""
+    q_doc = db.query(Document)
+    q_rel = db.query(KnowledgeRelationship)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+        q_rel = q_rel.filter(KnowledgeRelationship.user_id == user_id)
+
+    documents = {d.id: d for d in q_doc.all()}
+    edges = q_rel.all()
+
+    user_skill_ids = set()
+    for d in documents.values():
+        for s in d.skills:
+            user_skill_ids.add(s.id)
+
+    skills = {s.id: s for s in db.query(Skill).filter(Skill.id.in_(user_skill_ids)).all()} if user_skill_ids else {}
 
     nodes = []
     for d in documents.values():

@@ -7,11 +7,17 @@ from sqlalchemy.orm import Session
 from models import Document, TimelineEvent
 
 
-def rebuild_timeline(db: Session):
-    db.query(TimelineEvent).delete()
-    documents = db.query(Document).filter(Document.doc_date != "").all()
+def rebuild_timeline(db: Session, user_id: int | None = None):
+    q_del = db.query(TimelineEvent)
+    q_doc = db.query(Document).filter(Document.doc_date != "")
+    if user_id is not None:
+        q_del = q_del.filter(TimelineEvent.user_id == user_id)
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    q_del.delete()
+    documents = q_doc.all()
     for doc in documents:
         db.add(TimelineEvent(
+            user_id=doc.user_id,
             document_id=doc.id,
             year=doc.doc_date,
             label=doc.title or doc.original_filename,
@@ -20,8 +26,11 @@ def rebuild_timeline(db: Session):
     db.commit()
 
 
-def get_timeline(db: Session) -> list[dict]:
-    events = db.query(TimelineEvent).order_by(TimelineEvent.year.asc()).all()
+def get_timeline(db: Session, user_id: int | None = None) -> list[dict]:
+    q = db.query(TimelineEvent)
+    if user_id is not None:
+        q = q.filter(TimelineEvent.user_id == user_id)
+    events = q.order_by(TimelineEvent.year.asc()).all()
     grouped: dict[str, list[dict]] = {}
     for e in events:
         grouped.setdefault(e.year, []).append({

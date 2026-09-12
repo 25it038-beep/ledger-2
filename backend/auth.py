@@ -36,11 +36,16 @@ import time
 import jwt
 import requests
 from jwt import PyJWKClient
+from fastapi import Request, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from models import User
 
 PUBLIC_PATHS = {
     "/api/auth/config",
     "/api/auth/demo-login",
     "/api/demo/reset-sample-data",
+    "/api/resume/download",
 }
 
 
@@ -116,8 +121,8 @@ def verify_session_token(token: str) -> dict:
             token,
             signing_key.key,
             algorithms=["RS256"],
-            issuer=f"https://{_frontend_api()}",
-            options={"verify_aud": False},
+            options={"verify_aud": False, "verify_signature": True, "verify_exp": True},
+            leeway=60,
         )
     except jwt.PyJWTError as e:
         raise AuthError(f"Invalid or expired session: {e}")
@@ -200,5 +205,74 @@ def require_request_auth(path: str, authorization_header: str | None) -> dict | 
     except Exception as e:
         print(f"[auth] Token verification error: {e}. Proceeding with guest access.")
         return None
+
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """
+    FastAPI dependency that returns the authenticated User record.
+    1. Reads user claims verified by clerk_auth_middleware.
+    2. If missing, checks the Authorization header directly (demo token or Clerk session).
+    3. Looks up or provisions the User record in database.
+    4. Falls back to the Demo Account if unauthenticated.
+    """
+    from datetime import datetime
+
+    claims = getattr(request.state, "user_claims", None)
+    if not claims:
+        auth_header = request.headers.get("authorization")
+        token = get_bearer_token(auth_header)
+        if token:
+            if token == "demo-token" or token.startswith("demo-"):
+                claims = {
+                    "sub": "user_demo_ledger_2026",
+                    "email": "demo@ledger.ai",
+                    "name": "Harshan Seliyan",
+                    "is_demo": True,
+                }
+            elif is_configured():
+                try:
+                    claims = verify_session_token(token)
+                except Exception:
+                    claims = None
+
+    clerk_id = (claims.get("sub") if claims else None) or "user_demo_ledger_2026"
+
+    user = db.query(User).filter(User.clerk_user_id == clerk_id).first()
+    now = datetime.utcnow()
+    if not user:
+        if clerk_id == "user_demo_ledger_2026":
+            email = "demo@ledger.ai"
+            name = "Harshan Seliyan"
+            image_url = "https://ui-avatars.com/api/?name=Harshan+Seliyan&background=d2a24a&color=0B0E13"
+        else:
+            profile = fetch_clerk_user(clerk_id)
+            email = None
+            addresses = profile.get("email_addresses") or []
+            if addresses:
+                email = addresses[0].get("email_address")
+            name = " ".join(filter(None, [profile.get("first_name"), profile.get("last_name")])).strip() or email
+            image_url = profile.get("image_url")
+            if not name:
+                name = f"User {clerk_id[-6:]}"
+
+        user = User(
+            clerk_user_id=clerk_id,
+            email=email,
+            name=name,
+            image_url=image_url,
+            created_at=now,
+            last_login_at=now,
+            login_count=1,
+        )
+        db.add(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            user = db.query(User).filter(User.clerk_user_id == clerk_id).first()
+
+    return user
+
 
 

@@ -23,24 +23,31 @@
     <h1 class="masthead-title" style="font-size:26px; margin:0 0 6px;">Ledger <span class="accent">of Record</span></h1>
     <div class="masthead-sub" style="margin-bottom:20px; font-size:13px; color:var(--text-secondary);">AI-Powered Digital Identity Platform</div>
 
-    <!-- Primary Authentication: Clerk First -->
-    <div id="clerk-sign-in" style="min-height:260px; width:100%;">
+    <!-- Mode switcher between Sign In and Sign Up -->
+    <div class="auth-mode-switch" id="auth-mode-switch" style="display:flex;gap:8px;margin-bottom:16px;">
+      <button type="button" id="auth-mode-signin" class="btn-subtle active" style="flex:1;padding:8px 12px;font-size:13px;font-weight:600;background:rgba(210,162,74,0.15);border:1px solid rgba(210,162,74,0.4);color:var(--accent-strong);border-radius:6px;cursor:pointer;">Sign In</button>
+      <button type="button" id="auth-mode-signup" class="btn-subtle" style="flex:1;padding:8px 12px;font-size:13px;font-weight:600;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:var(--text-secondary);border-radius:6px;cursor:pointer;">Create Account</button>
+    </div>
+
+    <!-- Primary Authentication: Clerk Container -->
+    <div id="clerk-sign-in" style="min-height:280px; width:100%;">
       <div id="clerk-loading-indicator" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:40px 10px; color:var(--text-secondary); text-align:center;">
         <div style="width:26px; height:26px; border:2.5px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
-        <div style="font-size:12.5px; font-family:var(--font-sans); color:var(--text-secondary);">Connecting to Clerk authentication…</div>
+        <div style="font-size:12.5px; font-family:var(--font-sans); color:var(--text-secondary);">Connecting to Clerk authentication...</div>
       </div>
     </div>
     <div id="auth-setup-hint" class="auth-setup-hint" style="display:none;">
-      Clerk isn't configured yet on the server. Add <code>CLERK_PUBLISHABLE_KEY</code> and
+      Clerk is not configured yet on the server. Add <code>CLERK_PUBLISHABLE_KEY</code> and
       <code>CLERK_SECRET_KEY</code> to your <code>.env</code> file, restart the server, and reload this page.
     </div>
 
-    <!-- Secondary Option: Demo Account at Bottom -->
-    <div class="demo-auth-divider" style="margin:20px 0 14px;"><span>OR EXPLORE DEMO</span></div>
-    <div class="demo-auth-box" style="padding:12px; background:rgba(210,162,74,0.06); border:1px solid rgba(210,162,74,0.22); border-radius:8px;">
-      <button id="demo-login-btn" class="primary demo-btn" style="width:100%; padding:10px; font-size:13px;">
-        🚀 Instant Access: Continue with Demo Account
+    <!-- Secondary Option: Guest / Demo Account -->
+    <div class="demo-auth-divider" style="margin:20px 0 14px;"><span>OR GUEST ACCESS</span></div>
+    <div class="demo-auth-box" style="padding:12px; background:rgba(210,162,74,0.06); border:1px solid rgba(210,162,74,0.22); border-radius:8px; text-align:center;">
+      <button id="demo-login-btn" class="primary demo-btn" style="width:100%; padding:10px; font-size:13px; font-weight:600; cursor:pointer;">
+        Continue as Guest (Demo Account)
       </button>
+      <div style="font-size:11px; color:var(--text-secondary); margin-top:6px;">Preloaded with sample documents and skills for immediate testing</div>
     </div>
   </div>
 </div>
@@ -57,8 +64,9 @@
       <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">Menu</button>
     </div>
     <div class="sidebar-user" id="sidebar-user">
+      <div id="clerk-user-button-sidebar" style="display:none;margin-right:8px;"></div>
       <img id="sidebar-avatar" class="sidebar-avatar" src="" alt="" />
-      <div style="flex:1;min-width:0;">
+      <div style="flex:1;min-width:0;" id="sidebar-user-details">
         <div style="display:flex;align-items:center;gap:6px;">
           <div id="sidebar-name" class="sidebar-name">—</div>
           <span id="sidebar-demo-badge" class="pill-demo" style="display:none;">DEMO</span>
@@ -129,8 +137,9 @@
         </button>
         <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">Theme</button>
         <button class="icon-btn" aria-label="Notifications">Alerts</button>
-        <button id="switch-to-clerk-btn" class="icon-btn" title="Sign out of demo and show Clerk authentication" style="display:none;background:rgba(210,162,74,0.18);border:1px solid rgba(210,162,74,0.4);color:var(--accent-strong);font-weight:700;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;">🔑 Sign In with Clerk</button>
+        <button id="switch-to-clerk-btn" class="icon-btn" title="Sign out of demo and show Clerk authentication" style="display:none;background:rgba(210,162,74,0.18);border:1px solid rgba(210,162,74,0.4);color:var(--accent-strong);font-weight:700;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;">Sign In with Clerk</button>
         <div class="user-mini" id="topbar-user">
+          <div id="clerk-user-button-topbar" style="display:none;margin-right:6px;"></div>
           <img id="topbar-avatar" src="" alt="" />
           <span id="topbar-name"></span>
           <span id="topbar-demo-badge" class="pill-demo" style="display:none;">DEMO</span>
@@ -1250,7 +1259,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-<script src="app.js?v=2026_clerk_fast_v11"></script>
+<script src="app.js?v=2026_clerk_rebuild_v1"></script>
 
 
 </body>

@@ -35,13 +35,23 @@ class VectorStore:
         self.vectorizer = TfidfVectorizer(stop_words="english", max_features=4096)
         self.matrix = self.vectorizer.fit_transform(texts)
 
-    def search(self, query: str, top_k: int = 10) -> list[tuple[int, float]]:
+    def search(self, query: str, top_k: int = 10, allowed_ids: set[int] | list[int] | None = None) -> list[tuple[int, float]]:
         if not self.vectorizer or self.matrix is None or not query.strip():
             return []
         q_vec = self.vectorizer.transform([query])
         sims = cosine_similarity(q_vec, self.matrix)[0]
+        allowed_set = set(allowed_ids) if allowed_ids is not None else None
         ranked = sorted(zip(self.doc_ids, sims), key=lambda x: x[1], reverse=True)
-        return [(doc_id, float(score)) for doc_id, score in ranked[:top_k] if score > 0]
+        results = []
+        for doc_id, score in ranked:
+            if score <= 0:
+                continue
+            if allowed_set is not None and doc_id not in allowed_set:
+                continue
+            results.append((doc_id, float(score)))
+            if len(results) >= top_k:
+                break
+        return results
 
 
 # Single in-memory instance shared by the app; rebuilt whenever documents change.

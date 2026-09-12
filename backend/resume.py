@@ -160,9 +160,14 @@ TARGET_MODES = [
 
 
 # ---------------------------------------------------------------- Extraction Helpers
-def _extract_name_and_contact(db: Session) -> Dict[str, Any]:
+def _extract_name_and_contact(db: Session, user_id: int | None = None) -> Dict[str, Any]:
     """Pull user contact info from User table, or parse from documents."""
-    user = db.query(User).order_by(User.last_login_at.desc()).first()
+    user = None
+    if user_id is not None:
+        user = db.query(User).get(user_id)
+    if not user:
+        user = db.query(User).order_by(User.last_login_at.desc()).first()
+
     name = user.name if user and user.name else ""
     email = user.email if user and user.email else ""
     
@@ -172,7 +177,10 @@ def _extract_name_and_contact(db: Session) -> Dict[str, Any]:
     github = ""
     portfolio = ""
 
-    docs = db.query(Document).all()
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
     for d in docs:
         text = d.extracted_text or ""
         # Look for github / portfolio links
@@ -224,8 +232,9 @@ def _extract_name_and_contact(db: Session) -> Dict[str, Any]:
                     break
 
 
+    fallback_name = user.name if user and user.name else "Harshan"
     return {
-        "name": name or "Harshan",
+        "name": name or fallback_name,
         "email": email or "",
         "phone": phone or "",
         "location": location or "",
@@ -236,10 +245,13 @@ def _extract_name_and_contact(db: Session) -> Dict[str, Any]:
     }
 
 
-def _extract_education(db: Session) -> List[Dict[str, Any]]:
+def _extract_education(db: Session, user_id: int | None = None) -> List[Dict[str, Any]]:
     """Extract education history from Academic or Resume documents."""
     edu_list = []
-    docs = db.query(Document).all()
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
     
     for d in docs:
         text = d.extracted_text or ""
@@ -298,10 +310,13 @@ def _extract_education(db: Session) -> List[Dict[str, Any]]:
     return edu_list
 
 
-def _extract_projects(db: Session) -> List[Dict[str, Any]]:
+def _extract_projects(db: Session, user_id: int | None = None) -> List[Dict[str, Any]]:
     """Extract projects from Project documents or Resume text."""
     projects = []
-    docs = db.query(Document).filter(Document.category == "Project").all()
+    q_doc = db.query(Document).filter(Document.category == "Project")
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
     
     for d in docs:
         text = d.extracted_text or ""
@@ -344,7 +359,10 @@ def _extract_projects(db: Session) -> List[Dict[str, Any]]:
             }
         })
 
-    resume_docs = db.query(Document).filter(Document.category == "Resume").all()
+    q_resume = db.query(Document).filter(Document.category == "Resume")
+    if user_id is not None:
+        q_resume = q_resume.filter(Document.user_id == user_id)
+    resume_docs = q_resume.all()
     for rd in resume_docs:
         text = rd.extracted_text or ""
         if "project" in text.lower() and not projects:
@@ -362,10 +380,13 @@ def _extract_projects(db: Session) -> List[Dict[str, Any]]:
     return projects
 
 
-def _extract_experience(db: Session) -> List[Dict[str, Any]]:
+def _extract_experience(db: Session, user_id: int | None = None) -> List[Dict[str, Any]]:
     """Extract internships or work experience from Internship documents."""
     experiences = []
-    docs = db.query(Document).filter(Document.category == "Internship").all()
+    q_doc = db.query(Document).filter(Document.category == "Internship")
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
     
     for d in docs:
         text = d.extracted_text or ""
@@ -404,7 +425,10 @@ def _extract_experience(db: Session) -> List[Dict[str, Any]]:
             }
         })
 
-    resume_docs = db.query(Document).filter(Document.category == "Resume").all()
+    q_resume = db.query(Document).filter(Document.category == "Resume")
+    if user_id is not None:
+        q_resume = q_resume.filter(Document.user_id == user_id)
+    resume_docs = q_resume.all()
     for rd in resume_docs:
         text = rd.extracted_text or ""
         if "backend developer intern" in text.lower() and not any("backend" in e.get("role","").lower() for e in experiences):
@@ -428,10 +452,13 @@ def _extract_experience(db: Session) -> List[Dict[str, Any]]:
     return experiences
 
 
-def _extract_certifications(db: Session) -> List[Dict[str, Any]]:
+def _extract_certifications(db: Session, user_id: int | None = None) -> List[Dict[str, Any]]:
     """Extract certifications from Certification documents."""
     certs = []
-    docs = db.query(Document).filter(Document.category == "Certification").all()
+    q_doc = db.query(Document).filter(Document.category == "Certification")
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
     
     for d in docs:
         text = d.extracted_text or ""
@@ -465,10 +492,13 @@ def _extract_certifications(db: Session) -> List[Dict[str, Any]]:
     return certs
 
 
-def _extract_achievements(db: Session) -> List[Dict[str, Any]]:
+def _extract_achievements(db: Session, user_id: int | None = None) -> List[Dict[str, Any]]:
     """Extract honors, hackathon prizes, and achievements from Achievement documents."""
     achievements = []
-    docs = db.query(Document).filter(Document.category == "Achievement").all()
+    q_doc = db.query(Document).filter(Document.category == "Achievement")
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
     
     for d in docs:
         text = d.extracted_text or ""
@@ -501,24 +531,30 @@ def _extract_achievements(db: Session) -> List[Dict[str, Any]]:
     return achievements
 
 
-def _extract_categorized_skills(db: Session) -> Dict[str, Any]:
-    """Organize all extracted skills from database into standard categories with evidence."""
-    all_skills = db.query(Skill).all()
+def _extract_categorized_skills(db: Session, user_id: int | None = None) -> Dict[str, Any]:
+    """Organize all extracted skills from user's documents into standard categories with evidence."""
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
+
+    skills_map: Dict[str, List[Document]] = {}
+    for d in docs:
+        for s in d.skills:
+            skills_map.setdefault(s.name, []).append(d)
+
     categorized: Dict[str, List[str]] = {}
     skill_evidence: Dict[str, List[Dict[str, Any]]] = {}
 
-    for s in all_skills:
-        cat = SKILL_CATEGORY_MAP.get(s.name, "Other Technologies")
-        categorized.setdefault(cat, []).append(s.name)
-        
-        docs_supporting = []
-        for d in s.documents:
-            docs_supporting.append({
-                "id": d.id,
-                "title": d.title or d.original_filename,
-                "category": d.category
-            })
-        skill_evidence[s.name] = docs_supporting
+    for s_name, s_docs in skills_map.items():
+        cat = SKILL_CATEGORY_MAP.get(s_name, "Other Technologies")
+        categorized.setdefault(cat, []).append(s_name)
+
+        docs_supporting = [
+            {"id": d.id, "title": d.title or d.original_filename, "category": d.category}
+            for d in s_docs
+        ]
+        skill_evidence[s_name] = docs_supporting
 
     for cat in categorized:
         categorized[cat].sort()
@@ -561,26 +597,35 @@ def _generate_grounded_summary(name: str, education: List[Dict], projects: List[
 
 
 # ---------------------------------------------------------------- Skill Intelligence
-def get_skill_intelligence(db: Session) -> Dict[str, Any]:
+def get_skill_intelligence(db: Session, user_id: int | None = None) -> Dict[str, Any]:
     """Provide deep skill intelligence based on the user's digital identity."""
-    skills = db.query(Skill).all()
-    
-    total_skills = len(skills)
+    q_doc = db.query(Document)
+    if user_id is not None:
+        q_doc = q_doc.filter(Document.user_id == user_id)
+    docs = q_doc.all()
+
+    skills_map: Dict[str, List[Document]] = {}
+    for d in docs:
+        for s in d.skills:
+            skills_map.setdefault(s.name, []).append(d)
+
+    total_skills = len(skills_map)
     skill_counts = []
-    
-    for s in skills:
-        count = len(s.documents)
-        ev_items = []
-        for d in s.documents:
-            ev_items.append({
+
+    for s_name, s_docs in skills_map.items():
+        count = len(s_docs)
+        ev_items = [
+            {
                 "title": d.title or d.original_filename,
                 "category": d.category,
                 "date": d.doc_date
-            })
+            }
+            for d in s_docs
+        ]
         skill_counts.append({
-            "name": s.name,
+            "name": s_name,
             "count": count,
-            "category": SKILL_CATEGORY_MAP.get(s.name, "Other Technologies"),
+            "category": SKILL_CATEGORY_MAP.get(s_name, "Other Technologies"),
             "evidence": ev_items
         })
 
@@ -763,12 +808,23 @@ def analyze_resume_quality(resume_data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------- Core Data Assembler
-def build_initial_resume_data(db: Session, target: str = "General", template: str = "minimal_professional") -> Dict[str, Any]:
+def build_initial_resume_data(
+    db: Session,
+    target: str = "General",
+    template: str = "minimal_professional",
+    user_id: int | None = None,
+    clerk_user_id: str | None = None,
+) -> Dict[str, Any]:
     """
     Constructs a complete, verifiable resume from database documents.
     If a saved resume exists in the database, merges user customizations.
     """
-    saved = db.query(SavedResume).filter(SavedResume.user_id == "default").order_by(SavedResume.updated_at.desc()).first()
+    resume_user_key = clerk_user_id or (str(user_id) if user_id else "default")
+    saved = db.query(SavedResume).filter(SavedResume.user_id == resume_user_key).order_by(SavedResume.updated_at.desc()).first()
+    if not saved and resume_user_key != "default":
+        # Fallback to default only if user has no saved resume
+        saved = db.query(SavedResume).filter(SavedResume.user_id == "default").order_by(SavedResume.updated_at.desc()).first()
+
     if saved and saved.resume_data:
         try:
             data = json.loads(saved.resume_data)
@@ -778,13 +834,13 @@ def build_initial_resume_data(db: Session, target: str = "General", template: st
         except Exception:
             pass
 
-    personal = _extract_name_and_contact(db)
-    education = _extract_education(db)
-    projects = _extract_projects(db)
-    experiences = _extract_experience(db)
-    certifications = _extract_certifications(db)
-    achievements = _extract_achievements(db)
-    skills_data = _extract_categorized_skills(db)
+    personal = _extract_name_and_contact(db, user_id=user_id)
+    education = _extract_education(db, user_id=user_id)
+    projects = _extract_projects(db, user_id=user_id)
+    experiences = _extract_experience(db, user_id=user_id)
+    certifications = _extract_certifications(db, user_id=user_id)
+    achievements = _extract_achievements(db, user_id=user_id)
+    skills_data = _extract_categorized_skills(db, user_id=user_id)
     skills = skills_data["categories"]
 
     summary = _generate_grounded_summary(personal["name"], education, projects, skills, experiences)
