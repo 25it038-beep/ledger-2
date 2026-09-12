@@ -38,9 +38,9 @@ def _clean_html(text: Optional[str]) -> str:
 def _strip_emojis(text: Optional[str]) -> str:
     if not text:
         return ""
-    # Normalize unicode quotes, dashes and unprintable characters
+    # Normalize unicode quotes, dashes, fullwidth pipes and unprintable characters
     clean = text.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
-    clean = clean.replace("\u2013", "-").replace("\u2014", "-").replace("\ufffd", "")
+    clean = clean.replace("\u2013", "-").replace("\u2014", "-").replace("\ufffd", "").replace("\uff5c", "|")
     # Strip high surrogate / astral symbols (emojis) and misc symbol blocks
     clean = re.sub(r"[\U00010000-\U0010ffff]", "", clean)
     clean = re.sub(r"[\u2600-\u27bf\u2b50\ufe0f\u200d]", "", clean)

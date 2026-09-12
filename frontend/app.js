@@ -16,17 +16,229 @@ function setCachedUser(user) {
   else localStorage.removeItem(CACHED_USER_KEY);
 }
 
-function showToast(msg) {
-  let toast = document.getElementById("global-toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "global-toast";
-    toast.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#131A23;color:#d2a24a;border:1px solid rgba(210,162,74,0.5);padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,0.6);z-index:99999;transition:opacity 0.3s ease;pointer-events:none;";
-    document.body.appendChild(toast);
+// ==========================================
+// Comprehensive Site-Wide Notification Engine
+// ==========================================
+const NOTIFICATIONS_STORAGE_KEY = "ledger_activity_notifications_v1";
+let notificationHistory = [];
+try {
+  const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+  if (saved) notificationHistory = JSON.parse(saved);
+} catch (e) { notificationHistory = []; }
+
+let unreadNotificationCount = 0;
+
+function saveNotifications() {
+  try {
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notificationHistory.slice(0, 50)));
+  } catch (e) {}
+}
+
+function playNotificationChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.035, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.23);
+  } catch (e) {
+    // Fail silently if browser blocks audio
   }
-  toast.textContent = msg;
-  toast.style.opacity = "1";
-  setTimeout(() => { toast.style.opacity = "0"; }, 3500);
+}
+
+function notify(message, type = "info", title = "") {
+  if (!message) return;
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const iconMap = {
+    success: "✓",
+    info: "ℹ",
+    warning: "⚠",
+    error: "✕",
+    ai: "✦",
+  };
+  const icon = iconMap[type] || "🔔";
+  const displayTitle = title || (type === "ai" ? "AI Intelligence" : (type.charAt(0).toUpperCase() + type.slice(1)));
+
+  // Add to notification history & badge
+  notificationHistory.unshift({
+    id: "notif_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+    message,
+    type,
+    title: displayTitle,
+    icon,
+    time: timeStr,
+    timestamp: Date.now(),
+  });
+  if (notificationHistory.length > 50) notificationHistory.pop();
+  saveNotifications();
+
+  unreadNotificationCount++;
+  updateAlertsBadge();
+  renderNotificationCenter();
+
+  // Play subtle chime
+  playNotificationChime();
+
+  // Render floating toast
+  renderFloatingToast(message, type, displayTitle, icon);
+}
+
+function showToast(msg, type = "info", title = "") {
+  notify(msg, type, title);
+}
+window.showToast = showToast;
+window.notify = notify;
+
+function renderFloatingToast(message, type, title, icon) {
+  let container = document.getElementById("toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toast-container";
+    container.className = "toast-container";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `ledger-toast toast-${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon-box">${icon}</div>
+    <div class="toast-content">
+      <div class="toast-title">${escapeHtml(title)}</div>
+      <div class="toast-msg">${escapeHtml(message)}</div>
+    </div>
+    <button type="button" class="toast-close" aria-label="Dismiss notification">✕</button>
+    <div class="toast-progress-bar"></div>
+  `;
+
+  const closeBtn = toast.querySelector(".toast-close");
+  closeBtn.onclick = (e) => {
+    e.stopPropagation();
+    dismissToast(toast);
+  };
+
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add("toast-visible");
+  });
+
+  const timer = setTimeout(() => {
+    dismissToast(toast);
+  }, 4200);
+
+  toast.addEventListener("mouseenter", () => clearTimeout(timer));
+}
+
+function dismissToast(toast) {
+  if (!toast || toast.classList.contains("toast-hiding")) return;
+  toast.classList.remove("toast-visible");
+  toast.classList.add("toast-hiding");
+  setTimeout(() => {
+    if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 320);
+}
+
+function updateAlertsBadge() {
+  const badge = document.getElementById("alerts-badge");
+  if (!badge) return;
+  if (unreadNotificationCount > 0) {
+    badge.textContent = unreadNotificationCount > 99 ? "99+" : unreadNotificationCount;
+    badge.style.display = "flex";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+function renderNotificationCenter() {
+  const list = document.getElementById("nc-list");
+  if (!list) return;
+
+  if (notificationHistory.length === 0) {
+    list.innerHTML = `<div class="nc-empty"><span style="font-size:24px;display:block;margin-bottom:6px;">📭</span>No notifications yet</div>`;
+    return;
+  }
+
+  list.innerHTML = notificationHistory.map(item => `
+    <div class="nc-item nc-item-${item.type}">
+      <div class="nc-item-icon">${item.icon}</div>
+      <div class="nc-item-content">
+        <div class="nc-item-header">
+          <span class="nc-item-title">${escapeHtml(item.title)}</span>
+          <span class="nc-item-time">${escapeHtml(item.time)}</span>
+        </div>
+        <div class="nc-item-msg">${escapeHtml(item.message)}</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+let _notificationCenterInitialized = false;
+function initNotificationCenter() {
+  if (_notificationCenterInitialized) return;
+  const toggleBtn = document.getElementById("alerts-toggle-btn");
+  const clearBtn = document.getElementById("nc-clear-btn");
+  const closeBtn = document.getElementById("nc-close-btn");
+  const nc = document.getElementById("notification-center");
+
+  if (!toggleBtn || !nc) return;
+  _notificationCenterInitialized = true;
+
+  toggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isHidden = nc.style.display === "none" || getComputedStyle(nc).display === "none";
+    if (isHidden) {
+      nc.style.display = "flex";
+      unreadNotificationCount = 0;
+      updateAlertsBadge();
+      renderNotificationCenter();
+    } else {
+      nc.style.display = "none";
+    }
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      notificationHistory = [];
+      saveNotifications();
+      unreadNotificationCount = 0;
+      updateAlertsBadge();
+      renderNotificationCenter();
+      notify("Notification history cleared", "info", "Alerts");
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      nc.style.display = "none";
+    });
+  }
+
+  // Close when clicking outside
+  document.addEventListener("click", (e) => {
+    if (nc && nc.style.display !== "none" && !nc.contains(e.target) && e.target !== toggleBtn && !toggleBtn?.contains(e.target)) {
+      nc.style.display = "none";
+    }
+  });
+
+  updateAlertsBadge();
+  renderNotificationCenter();
 }
 
 /** Wraps fetch() so every request to our API carries the signed-in user's
@@ -51,16 +263,17 @@ async function loadSampleStarterData(btn) {
     btn.disabled = true;
     btn.textContent = "Loading sample data...";
   }
+  notify("Loading starter sample data into your portfolio...", "info", "Portfolio");
   try {
     const res = await apiFetch(`${API}/user/seed-sample-data`, { method: "POST" });
     const data = await res.json();
-    showToast(data.message || "Sample portfolio loaded into your archive.");
+    notify(data.message || "Sample portfolio loaded into your archive.", "success", "Portfolio");
     await loadDashboard();
     await refreshTotal();
     await renderCategories();
     await renderDocs(activeCategory);
   } catch (err) {
-    showToast("Error loading sample data: " + err.message);
+    notify("Error loading sample data: " + err.message, "error", "Portfolio");
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -71,18 +284,16 @@ async function loadSampleStarterData(btn) {
 window.loadSampleStarterData = loadSampleStarterData;
 
 function showCachedUserBadge() {
-  const userBadgeEl = document.getElementById("user-badge");
-  if (userBadgeEl) userBadgeEl.style.display = "flex";
+  let isDemo = isDemoSession();
   const cached = getCachedUser();
   let name = "Account";
   let image = "https://ui-avatars.com/api/?name=User&background=cba135&color=fff";
   let email = "";
-  let isDemo = false;
   if (cached) {
     name = cached.name || cached.email || "Signed in";
     if (cached.image_url) image = cached.image_url;
     email = cached.email || "";
-    isDemo = !!cached.is_demo;
+    isDemo = isDemo || !!cached.is_demo;
   } else if (clerk && (clerk.user || clerk.session?.user)) {
     const u = clerk.user || clerk.session.user;
     name = u.fullName || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.primaryEmailAddress?.emailAddress || "Signed in";
@@ -155,6 +366,7 @@ async function loginAsDemoAccount() {
     topBtn.disabled = true;
     topBtn.textContent = "Initializing Demo Account...";
   }
+  notify("Connecting to guest demo account and loading portfolio...", "info", "Account");
   try {
     const res = await fetch(`${API}/auth/demo-login`, { method: "POST" });
     const data = await res.json();
@@ -164,11 +376,11 @@ async function loginAsDemoAccount() {
       setCachedUser(data);
       showApp();
       initApp();
-      showToast("Logged in as Demo Account with preloaded sample data.");
+      notify("Welcome to Ledger! Signed in with Demo Account.", "success", "Account");
     }
   } catch (err) {
     console.error("Demo login error:", err);
-    alert("Could not connect to demo account. Please make sure the backend server is running.");
+    notify("Could not connect to demo account. Please make sure the backend is running.", "error", "Account");
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -187,16 +399,18 @@ async function resetDemoSampleData() {
     btn.disabled = true;
     btn.textContent = "Reloading...";
   }
+  notify("Resetting demo portfolio to fresh baseline data...", "info", "Demo Account");
   try {
     const res = await apiFetch(`${API}/demo/reset-sample-data`, { method: "POST" });
     const data = await res.json();
     if (data.status === "ok") {
-      showToast("Clean sample data reloaded. Refreshing dashboard...");
+      notify("Fresh sample portfolio loaded. Refreshing dashboard...", "success", "Demo Account");
       await loadPremiumDashboard();
       if (typeof loadHackathons === "function") loadHackathons();
     }
   } catch (err) {
     console.error("Reset sample data error:", err);
+    notify("Failed to reload sample data: " + err.message, "error", "Demo Account");
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -577,7 +791,7 @@ async function handleSignOut() {
   if (clerk && typeof clerk.signOut === "function") {
     try { await clerk.signOut(); } catch (e) { console.warn("Clerk signOut error:", e); }
   }
-  showToast("Signed out. Showing authentication portal...");
+  notify("Signed out. Showing authentication portal...", "info", "Account");
   showAuthGate();
   if (clerk) mountClerkAuth("signIn");
 }
@@ -611,6 +825,14 @@ function activateTab(tabName) {
   };
   const titleEl = document.getElementById("page-title");
   if (titleEl) titleEl.textContent = pageTitleMap[tabName] || "Ledger";
+
+  const prevTab = window._currentActiveTab;
+  window._currentActiveTab = tabName;
+  if (prevTab && prevTab !== tabName) {
+    const title = pageTitleMap[tabName] || tabName;
+    notify(`Opened ${title}`, "info", "Navigation");
+  }
+
   if (tabName === "dashboard") loadDashboard();
   if (tabName === "timeline") loadTimeline();
   if (tabName === "graph") loadGraph();
@@ -657,6 +879,9 @@ fileInput.addEventListener("change", e => handleFiles(e.target.files));
 async function handleFiles(fileList) {
   const log = document.getElementById("upload-log");
   const dateVal = document.getElementById("upload-date").value;
+  if (!fileList || !fileList.length) return;
+  notify(`Ingesting ${fileList.length} file(s) into your digital archive...`, "info", "Ingestion");
+
   for (const file of fileList) {
     const line = document.createElement("div");
     line.textContent = `Ingesting ${file.name}…`;
@@ -669,11 +894,14 @@ async function handleFiles(fileList) {
       const data = await res.json();
       if (!res.ok) {
         line.innerHTML = `<span style="color:var(--accent);">&#10007;</span> Failed: ${escapeHtml(file.name)} (${escapeHtml(data.detail || res.statusText)})`;
+        notify(`Failed to ingest ${file.name}: ${data.detail || res.statusText}`, "error", "Ingestion");
         continue;
       }
       line.innerHTML = `<span class="ok">&#10003;</span> ${escapeHtml(file.name)} &rarr; classified as <b>${escapeHtml(data.category)}</b>${data.skills.length ? " · " + escapeHtml(data.skills.join(", ")) : ""}`;
+      notify(`Ingested "${file.name}" → classified as "${data.category}"`, "success", "Ingestion");
     } catch (err) {
       line.innerHTML = `<span style="color:var(--accent);">&#10007;</span> Failed: ${escapeHtml(file.name)} (${escapeHtml(err.message)})`;
+      notify(`Failed to ingest ${file.name}: ${err.message}`, "error", "Ingestion");
     }
   }
   refreshTotal();
@@ -683,19 +911,29 @@ async function handleFiles(fileList) {
 document.getElementById("link-submit").addEventListener("click", async () => {
   const url = document.getElementById("link-url").value.trim();
   if (!url) return;
+  notify(`Extracting & classifying web link: ${url.slice(0, 40)}...`, "info", "Ingestion");
   const form = new FormData();
   form.append("url", url);
   form.append("label", document.getElementById("link-label").value);
   form.append("doc_date", document.getElementById("link-date").value);
-  const res = await apiFetch(`${API}/upload-link`, { method: "POST", body: form });
-  const data = await res.json();
-  const log = document.getElementById("upload-log");
-  const line = document.createElement("div");
-  line.innerHTML = `<span class="ok">&#10003;</span> Linked ${data.title} &rarr; classified as <b>${data.category}</b>`;
-  log.prepend(line);
-  document.getElementById("link-url").value = "";
-  document.getElementById("link-label").value = "";
-  refreshTotal();
+  try {
+    const res = await apiFetch(`${API}/upload-link`, { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) {
+      notify(`Link extraction failed: ${data.detail || res.statusText}`, "error", "Ingestion");
+      return;
+    }
+    const log = document.getElementById("upload-log");
+    const line = document.createElement("div");
+    line.innerHTML = `<span class="ok">&#10003;</span> Linked ${escapeHtml(data.title)} &rarr; classified as <b>${escapeHtml(data.category)}</b>`;
+    log.prepend(line);
+    document.getElementById("link-url").value = "";
+    document.getElementById("link-label").value = "";
+    notify(`Linked "${data.title}" → classified as "${data.category}"`, "success", "Ingestion");
+    refreshTotal();
+  } catch (err) {
+    notify(`Error extracting link: ${err.message}`, "error", "Ingestion");
+  }
 });
 
 // ---------------------------------------------------------------- Module 2: Dashboard
@@ -716,7 +954,11 @@ function makeChip(label, value, count) {
   const chip = document.createElement("button");
   chip.className = "category-chip" + (activeCategory === value ? " active" : "");
   chip.textContent = `${label} (${count})`;
-  chip.addEventListener("click", () => { activeCategory = value; loadDashboard(); });
+  chip.addEventListener("click", () => {
+    activeCategory = value;
+    notify(value ? `Filtered archive by category: "${value}"` : `Viewing all archive categories (${count} items)`, "info", "Archive");
+    loadDashboard();
+  });
   return chip;
 }
 
@@ -769,14 +1011,15 @@ async function removeDocument(id, cardEl) {
     const res = await apiFetch(`${API}/documents/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.detail || "Couldn't remove the document.");
+      notify(data.detail || "Couldn't remove the document.", "error", "Archive");
       return;
     }
     cardEl.remove();
     refreshTotal();
     loadDashboard();
+    notify("Document removed from archive.", "warning", "Archive");
   } catch (e) {
-    alert("Couldn't reach the server to remove the document.");
+    notify("Couldn't reach the server to remove the document.", "error", "Archive");
   }
 }
 
@@ -900,23 +1143,47 @@ async function runSearch() {
   const q = document.getElementById("search-input").value.trim();
   const box = document.getElementById("search-results");
   if (!q) { box.innerHTML = ""; return; }
-  const results = await apiFetch(`${API}/search?q=${encodeURIComponent(q)}`).then(r => r.json());
-  if (!results.length) {
-    box.innerHTML = `<div class="empty-state">No matches. Try a broader term ("certificate", "python", "internship")…</div>`;
-    return;
+  notify(`Searching archive for "${q}"...`, "info", "Retrieve");
+  try {
+    const results = await apiFetch(`${API}/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+    if (!results.length) {
+      box.innerHTML = `<div class="empty-state">No matches. Try a broader term ("certificate", "python", "internship")…</div>`;
+      notify(`No documents matched "${q}". Try broader terms.`, "warning", "Retrieve");
+      return;
+    }
+    notify(`Found ${results.length} matching document(s) for "${q}"`, "success", "Retrieve");
+    box.innerHTML = results.map(r => `
+      <div class="result-item">
+        <span class="rel">match ${(r.relevance * 100).toFixed(0)}%</span>
+        <div class="doc-cat" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#b8863f;text-transform:uppercase;">${r.category}${r.doc_date ? " · " + r.doc_date : ""}</div>
+        <h4 style="font-family:'Source Serif 4',serif;margin:6px 0 6px;">${escapeHtml(r.title)}</h4>
+        <p style="font-size:12.5px;color:#b7bec6;margin:0 0 8px;">${escapeHtml((r.summary || "").replace(/^\[[^\]]*\]\s*/, ""))}</p>
+        ${r.has_file ? `<a class="file-link" href="${API}/documents/${r.id}/file" target="_blank">View original file &rarr;</a>` : (r.source_url ? `<a class="file-link" href="${r.source_url}" target="_blank">Open link &rarr;</a>` : "")}
+      </div>
+    `).join("");
+  } catch (err) {
+    notify(`Search error: ${err.message}`, "error", "Retrieve");
   }
-  box.innerHTML = results.map(r => `
-    <div class="result-item">
-      <span class="rel">match ${(r.relevance * 100).toFixed(0)}%</span>
-      <div class="doc-cat" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#b8863f;text-transform:uppercase;">${r.category}${r.doc_date ? " · " + r.doc_date : ""}</div>
-      <h4 style="font-family:'Source Serif 4',serif;margin:6px 0 6px;">${escapeHtml(r.title)}</h4>
-      <p style="font-size:12.5px;color:#b7bec6;margin:0 0 8px;">${escapeHtml((r.summary || "").replace(/^\[[^\]]*\]\s*/, ""))}</p>
-      ${r.has_file ? `<a class="file-link" href="${API}/documents/${r.id}/file" target="_blank">View original file &rarr;</a>` : (r.source_url ? `<a class="file-link" href="${r.source_url}" target="_blank">Open link &rarr;</a>` : "")}
-    </div>
-  `).join("");
 }
-document.getElementById("search-btn").addEventListener("click", runSearch);
-document.getElementById("search-input").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+document.getElementById("search-btn")?.addEventListener("click", runSearch);
+document.getElementById("search-input")?.addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+
+// Global search input in topbar
+const globalSearchInput = document.getElementById("global-search");
+if (globalSearchInput) {
+  globalSearchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const q = globalSearchInput.value.trim();
+      if (!q) return;
+      activateTab("search");
+      const sInput = document.getElementById("search-input");
+      if (sInput) {
+        sInput.value = q;
+        runSearch();
+      }
+    }
+  });
+}
 
 // ---------------------------------------------------------------- Career Intelligence Engine
 async function loadCareerProfile() {
@@ -935,23 +1202,27 @@ function showCareerEmpty() {
   document.getElementById("career-content").style.display = "none";
 }
 
-document.getElementById("career-run-btn").addEventListener("click", async () => {
+document.getElementById("career-run-btn")?.addEventListener("click", async () => {
   const btn = document.getElementById("career-run-btn");
   const empty = document.getElementById("career-empty");
   btn.textContent = "Analyzing with NVIDIA AI…";
   btn.disabled = true;
   empty.style.display = "block";
   empty.innerHTML = `<div class="auth-loading">Reading your credentials & generating real-time AI intelligence (~8s)…</div>`;
+  notify("AI Career Analysis started. Synthesizing credential graph...", "ai", "Career Intelligence");
   try {
     const res = await apiFetch(`${API}/career/analyze`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) {
       empty.textContent = `Couldn't run the analysis: ${data.detail || "unknown error"}`;
+      notify(`Career analysis failed: ${data.detail || "unknown error"}`, "error", "Career Intelligence");
     } else {
       renderCareerReport(data);
+      notify("Career Intelligence Report synthesized successfully!", "success", "Career Intelligence");
     }
   } catch (e) {
     empty.textContent = "Couldn't reach the server to run the analysis. Check if backend is running.";
+    notify("Couldn't reach the server to run career analysis.", "error", "Career Intelligence");
   }
   btn.textContent = "Run career analysis";
   btn.disabled = false;
@@ -1055,26 +1326,33 @@ function renderCareerReport(report) {
 }
 
 // Job match
-document.getElementById("job-match-btn").addEventListener("click", async () => {
+document.getElementById("job-match-btn")?.addEventListener("click", async () => {
   const jd = document.getElementById("job-desc-input").value.trim();
   const resultEl = document.getElementById("job-match-result");
   if (!jd) return;
   resultEl.innerHTML = `<div class="empty-state">Comparing against the job description…</div>`;
+  notify("Comparing your verified credentials against the job description...", "ai", "Job Match");
   const form = new FormData();
   form.append("job_description", jd);
-  const res = await apiFetch(`${API}/career/job-match`, { method: "POST", body: form });
-  const data = await res.json();
-  if (!res.ok) {
-    resultEl.innerHTML = `<div class="empty-state">${escapeHtml(data.detail || "Couldn't complete the match.")}</div>`;
-    return;
+  try {
+    const res = await apiFetch(`${API}/career/job-match`, { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) {
+      resultEl.innerHTML = `<div class="empty-state">${escapeHtml(data.detail || "Couldn't complete the match.")}</div>`;
+      notify(`Job match analysis failed: ${data.detail || "unknown error"}`, "error", "Job Match");
+      return;
+    }
+    resultEl.innerHTML = `
+      <div class="match-row"><b>Match</b>${data.match_percentage}%</div>
+      <div class="match-row"><b>Matching skills</b>${(data.matching_skills || []).map(escapeHtml).join(", ") || "—"}</div>
+      <div class="match-row"><b>Missing skills</b>${(data.missing_skills || []).map(escapeHtml).join(", ") || "—"}</div>
+      ${(data.strengths_for_this_role || []).length ? `<div class="match-row"><b>Strengths</b>${data.strengths_for_this_role.map(escapeHtml).join(", ")}</div>` : ""}
+      ${(data.resume_suggestions || []).length ? `<ul class="roadmap-list">${data.resume_suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul>` : ""}
+    `;
+    notify(`Job Match analysis complete: ${data.match_percentage}% match score`, "success", "Job Match");
+  } catch (err) {
+    notify(`Job match failed: ${err.message}`, "error", "Job Match");
   }
-  resultEl.innerHTML = `
-    <div class="match-row"><b>Match</b>${data.match_percentage}%</div>
-    <div class="match-row"><b>Matching skills</b>${(data.matching_skills || []).map(escapeHtml).join(", ") || "—"}</div>
-    <div class="match-row"><b>Missing skills</b>${(data.missing_skills || []).map(escapeHtml).join(", ") || "—"}</div>
-    ${(data.strengths_for_this_role || []).length ? `<div class="match-row"><b>Strengths</b>${data.strengths_for_this_role.map(escapeHtml).join(", ")}</div>` : ""}
-    ${(data.resume_suggestions || []).length ? `<ul class="roadmap-list">${data.resume_suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul>` : ""}
-  `;
 });
 
 // Copilot
@@ -1088,19 +1366,27 @@ async function sendCopilotMessage() {
   const thinkingId = "thinking-" + Date.now();
   log.innerHTML += `<div class="copilot-msg bot" id="${thinkingId}">…</div>`;
   log.scrollTop = log.scrollHeight;
+  notify(`Sent question to AI Copilot: "${q.slice(0, 30)}..."`, "info", "Copilot");
+
   const form = new FormData();
   form.append("question", q);
   try {
     const res = await apiFetch(`${API}/career/copilot`, { method: "POST", body: form });
     const data = await res.json();
     document.getElementById(thinkingId).textContent = res.ok ? data.answer : (data.detail || "Something went wrong.");
+    if (res.ok) {
+      notify("AI Copilot generated a response", "ai", "Copilot");
+    } else {
+      notify("AI Copilot could not answer query", "warning", "Copilot");
+    }
   } catch (e) {
     document.getElementById(thinkingId).textContent = "Couldn't reach the server.";
+    notify("Couldn't reach the server for AI Copilot.", "error", "Copilot");
   }
   log.scrollTop = log.scrollHeight;
 }
-document.getElementById("copilot-send").addEventListener("click", sendCopilotMessage);
-document.getElementById("copilot-input").addEventListener("keydown", e => { if (e.key === "Enter") sendCopilotMessage(); });
+document.getElementById("copilot-send")?.addEventListener("click", sendCopilotMessage);
+document.getElementById("copilot-input")?.addEventListener("keydown", e => { if (e.key === "Enter") sendCopilotMessage(); });
 
 // ---------------------------------------------------------------- World Tech News
 let activeNewsCategory = "All";
@@ -1329,6 +1615,7 @@ document.querySelectorAll("#news-categories .category-chip").forEach(chip => {
     document.querySelectorAll("#news-categories .category-chip").forEach(c => c.classList.remove("active"));
     chip.classList.add("active");
     activeNewsCategory = chip.dataset.cat;
+    notify(`Filtered Tech News by category: "${chip.dataset.cat}"`, "info", "Tech Today");
     loadNews();
   });
 });
@@ -1336,15 +1623,19 @@ document.querySelectorAll("#news-categories .category-chip").forEach(chip => {
 // Search
 const newsSearchInput = document.getElementById("news-search");
 const newsSearchClear = document.getElementById("news-search-clear");
-document.getElementById("news-search-btn").addEventListener("click", () => {
-  activeNewsSearch = newsSearchInput.value.trim();
+document.getElementById("news-search-btn")?.addEventListener("click", () => {
+  activeNewsSearch = newsSearchInput ? newsSearchInput.value.trim() : "";
+  if (activeNewsSearch) {
+    notify(`Searching Tech News for "${activeNewsSearch}"...`, "info", "Tech Today");
+  }
   loadNews();
 });
 if (newsSearchClear) {
   newsSearchClear.addEventListener("click", () => {
-    newsSearchInput.value = "";
+    if (newsSearchInput) newsSearchInput.value = "";
     activeNewsSearch = "";
     if (newsSearchClear) newsSearchClear.style.display = "none";
+    notify("Cleared Tech News search filter", "info", "Tech Today");
     loadNews();
   });
 }
@@ -1354,6 +1645,9 @@ newsSearchInput?.addEventListener("input", () => {
 newsSearchInput?.addEventListener("keydown", e => {
   if (e.key === "Enter") {
     activeNewsSearch = newsSearchInput.value.trim();
+    if (activeNewsSearch) {
+      notify(`Searching Tech News for "${activeNewsSearch}"...`, "info", "Tech Today");
+    }
     loadNews();
   }
 });
@@ -1362,6 +1656,7 @@ newsSearchInput?.addEventListener("keydown", e => {
 const newsRefreshBtn = document.getElementById("news-refresh-btn");
 if (newsRefreshBtn) {
   newsRefreshBtn.addEventListener("click", () => {
+    notify("Refreshing live technology feed...", "info", "Tech Today");
     loadNews();
   });
 }
@@ -1838,6 +2133,9 @@ async function loadHackathons() {
       const searchTag = document.getElementById('hackathon-web-search-tag');
       if (searchTag) searchTag.style.display = 'none';
       hackathonState.search = searchInput ? searchInput.value.trim() : "";
+      if (hackathonState.search) {
+        notify(`Searching hackathons for "${hackathonState.search}"...`, "info", "Hackathons");
+      }
       loadHackathonsList();
     };
     if (searchBtn) searchBtn.addEventListener('click', triggerSearch);
@@ -1850,6 +2148,7 @@ async function loadHackathons() {
     if (webSearchBtn) {
       webSearchBtn.addEventListener('click', () => {
         const query = searchInput ? searchInput.value.trim() : "";
+        notify(`Searching live web for upcoming hackathons: "${query || 'upcoming AI'}"`, "info", "Hackathons");
         executeLiveWebSearch(query);
       });
     }
@@ -1862,6 +2161,7 @@ async function loadHackathons() {
         modeBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         hackathonState.mode = btn.dataset.mode;
+        notify(`Hackathon mode: ${btn.textContent.trim()}`, "info", "Hackathons");
         loadHackathonsList();
       });
     });
@@ -1873,6 +2173,7 @@ async function loadHackathons() {
         catChips.forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
         hackathonState.category = chip.dataset.cat;
+        notify(`Hackathon category: ${chip.textContent.trim()}`, "info", "Hackathons");
         loadHackathonsList();
       });
     });
@@ -1891,6 +2192,7 @@ async function loadHackathons() {
     if (countrySelect) {
       countrySelect.addEventListener('change', () => {
         hackathonState.country = countrySelect.value;
+        notify(`Hackathon region: ${countrySelect.options[countrySelect.selectedIndex]?.text || countrySelect.value}`, "info", "Hackathons");
         loadHackathonsList();
       });
     }
@@ -1902,6 +2204,7 @@ async function loadHackathons() {
       refreshBtn.addEventListener('click', async () => {
         if (spinner) spinner.style.display = 'inline-block';
         refreshBtn.disabled = true;
+        notify("Refreshing live hackathon database...", "info", "Hackathons");
         try {
           await apiFetch(`${API}/hackathons/refresh`, { method: 'POST' });
         } catch (e) {
@@ -2132,6 +2435,7 @@ let appInitialized = false;
 function initApp() {
   if (appInitialized) return; // avoid double-loading if auth state flips more than once
   appInitialized = true;
+  initNotificationCenter();
   refreshTotal();
   initTheme();
   setupAiWidget();
@@ -2147,6 +2451,7 @@ function initTheme() {
       document.body.classList.toggle('light');
       const isLight = document.body.classList.contains('light');
       localStorage.setItem('ledger-theme', isLight ? 'light' : 'dark');
+      notify(`Switched theme to ${isLight ? 'Light' : 'Dark'} Mode`, "info", "Theme");
     });
   }
 }
@@ -2265,6 +2570,8 @@ function initResumeDropdowns() {
 
     targetSelect.onchange = async () => {
       activeResumeTarget = targetSelect.value;
+      const targetLabel = targetSelect.options[targetSelect.selectedIndex]?.text || activeResumeTarget;
+      notify(`Resume tailored for target: "${targetLabel}"`, "info", "Resume Creator");
       updateDirectDownloadLinks();
       if (currentResumeData) {
         currentResumeData.target = activeResumeTarget;
@@ -2294,6 +2601,8 @@ function initResumeDropdowns() {
 
     templateSelect.onchange = () => {
       activeResumeTemplate = templateSelect.value;
+      const templateLabel = templateSelect.options[templateSelect.selectedIndex]?.text || activeResumeTemplate;
+      notify(`Resume template switched to: "${templateLabel}"`, "info", "Resume Creator");
       updateDirectDownloadLinks();
       if (currentResumeData) {
         currentResumeData.template = activeResumeTemplate;
@@ -3106,6 +3415,7 @@ async function downloadResumePdf() {
 
   if (btn) btn.textContent = "Generating PDF...";
   if (quickBtn) quickBtn.textContent = "Generating...";
+  notify("Generating high-resolution ATS resume PDF...", "ai", "Resume Creator");
 
   try {
     if (!currentResumeData) {
@@ -3114,6 +3424,7 @@ async function downloadResumePdf() {
     if (!currentResumeData) {
       // Direct navigation fallback if data is not initialized
       window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+      notify("Downloading resume PDF...", "info", "Resume Creator");
       return;
     }
 
@@ -3126,12 +3437,14 @@ async function downloadResumePdf() {
     if (!res.ok) {
       console.warn("Resume generate endpoint non-200 response, using direct download endpoint.");
       window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+      notify("Downloading resume PDF...", "info", "Resume Creator");
       return;
     }
 
     const blob = await res.blob();
     if (!blob || blob.size === 0) {
       window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+      notify("Downloading resume PDF...", "info", "Resume Creator");
       return;
     }
 
@@ -3143,6 +3456,7 @@ async function downloadResumePdf() {
     a.download = `${name}_Resume.pdf`;
     document.body.appendChild(a);
     a.click();
+    notify(`Resume PDF "${name}_Resume.pdf" downloaded successfully!`, "success", "Resume Creator");
     setTimeout(() => {
       window.URL.revokeObjectURL(url);
       a.remove();
@@ -3150,6 +3464,7 @@ async function downloadResumePdf() {
   } catch (err) {
     console.warn("PDF generation error, triggering fallback direct download:", err);
     window.location.href = `${API}/resume/download?target=${encodeURIComponent(activeResumeTarget)}&template=${encodeURIComponent(activeResumeTemplate)}`;
+    notify("Downloading resume PDF...", "info", "Resume Creator");
   } finally {
     if (btn) btn.textContent = origText;
     if (quickBtn) quickBtn.textContent = "PDF";
@@ -3160,6 +3475,7 @@ async function saveResumeDraft() {
   if (!currentResumeData) return;
   const statusEl = document.getElementById("resume-save-status");
   if (statusEl) statusEl.textContent = "Saving...";
+  notify("Saving resume draft...", "info", "Resume Creator");
 
   try {
     const res = await apiFetch(`${API}/resume/save`, {
@@ -3174,11 +3490,14 @@ async function saveResumeDraft() {
 
     if (res.ok) {
       if (statusEl) statusEl.textContent = "Saved " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      notify("Resume draft saved successfully.", "success", "Resume Creator");
     } else {
       if (statusEl) statusEl.textContent = "Save failed";
+      notify("Failed to save resume draft.", "error", "Resume Creator");
     }
   } catch (e) {
     if (statusEl) statusEl.textContent = "Save error";
+    notify("Server error saving resume draft.", "error", "Resume Creator");
   }
 }
 
@@ -3188,10 +3507,12 @@ document.getElementById("preview-download-quick-btn")?.addEventListener("click",
 document.getElementById("resume-save-btn")?.addEventListener("click", saveResumeDraft);
 document.getElementById("resume-refresh-btn")?.addEventListener("click", () => {
   if (confirm("Re-sync resume data with your latest uploaded documents? Any unsaved manual edits will be refreshed.")) {
+    notify("Re-syncing resume profile with latest archive credentials...", "info", "Resume Creator");
     loadResumeCreator();
   }
 });
 document.getElementById("resume-analyze-btn")?.addEventListener("click", () => {
+  notify("Running ATS scoring and structural diagnostics...", "ai", "Resume Creator");
   runDebouncedQualityCheck();
   const qPanel = document.getElementById("resume-quality-panel");
   if (qPanel) qPanel.scrollIntoView({ behavior: "smooth" });
@@ -3204,6 +3525,7 @@ document.getElementById("preview-zoom-in")?.addEventListener("click", () => {
   const zoomVal = document.getElementById("preview-zoom-val");
   if (paper) paper.style.transform = `scale(${resumeZoomLevel})`;
   if (zoomVal) zoomVal.textContent = Math.round(resumeZoomLevel * 100) + "%";
+  notify(`Preview zoom: ${Math.round(resumeZoomLevel * 100)}%`, "info", "Resume Creator");
 });
 
 document.getElementById("preview-zoom-out")?.addEventListener("click", () => {
@@ -3212,9 +3534,21 @@ document.getElementById("preview-zoom-out")?.addEventListener("click", () => {
   const zoomVal = document.getElementById("preview-zoom-val");
   if (paper) paper.style.transform = `scale(${resumeZoomLevel})`;
   if (zoomVal) zoomVal.textContent = Math.round(resumeZoomLevel * 100) + "%";
+  notify(`Preview zoom: ${Math.round(resumeZoomLevel * 100)}%`, "info", "Resume Creator");
 });
 
+// Delegated listener for external links
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("a[target='_blank']");
+  if (link && !link.closest(".notification-center")) {
+    const text = (link.textContent || "").replace(/\s+/g, " ").trim();
+    if (text) {
+      notify(`Opening link: "${text.slice(0, 45)}"`, "info", "Navigation");
+    }
+  }
+});
 
+initNotificationCenter();
 initAuth();
 
 // Support direct hash navigation (e.g. #resume)
@@ -3225,6 +3559,7 @@ window.addEventListener("hashchange", () => {
 
 // Check initial URL hash on load
 document.addEventListener("DOMContentLoaded", () => {
+  initNotificationCenter();
   const h = window.location.hash.replace("#", "").trim();
   if (h) {
     setTimeout(() => activateTab(h), 150);

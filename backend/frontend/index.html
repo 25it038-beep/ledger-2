@@ -17,6 +17,7 @@
 <script async crossorigin="anonymous" id="clerk-script" data-clerk-publishable-key="pk_test_c2hhcmluZy1yYWNlci01NzE1LmNsZXJrLmFjY291bnRzLmRldiQ" src="https://sharing-racer-5715.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"></script>
 </head>
 <body>
+<div id="toast-container" class="toast-container"></div>
 <a href="#page-title" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;">Skip to content</a>
 
 <!-- Auth gate: shown by default until session is verified -->
@@ -140,7 +141,24 @@
           ⟳ Reload Sample Data
         </button>
         <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">Theme</button>
-        <button class="icon-btn" aria-label="Notifications">Alerts</button>
+        <div class="alerts-btn-wrapper">
+          <button class="icon-btn" id="alerts-toggle-btn" aria-label="Notifications" title="Activity Notifications & Alerts">
+            <span>🔔</span> Alerts
+            <span id="alerts-badge" class="alerts-badge" style="display:none;">0</span>
+          </button>
+          <div id="notification-center" class="notification-center" style="display:none;">
+            <div class="nc-header">
+              <div class="nc-title"><span style="margin-right:6px;">🔔</span> Activity Notifications</div>
+              <div class="nc-actions">
+                <button type="button" id="nc-clear-btn" class="nc-btn-subtle" title="Clear all alerts">Clear All</button>
+                <button type="button" id="nc-close-btn" class="nc-btn-close" aria-label="Close notification panel">✕</button>
+              </div>
+            </div>
+            <div class="nc-body" id="nc-list">
+              <div class="nc-empty"><span style="font-size:24px;display:block;margin-bottom:6px;">📭</span>No notifications yet</div>
+            </div>
+          </div>
+        </div>
         <button id="switch-to-clerk-btn" class="icon-btn" title="Sign out of demo and show Clerk authentication" style="display:none;background:rgba(210,162,74,0.18);border:1px solid rgba(210,162,74,0.4);color:var(--accent-strong);font-weight:700;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;">Sign In with Clerk</button>
         <div class="user-mini" id="topbar-user">
           <img id="topbar-avatar" src="" alt="" />
@@ -498,6 +516,7 @@
       <div class="hackathon-header-top">
         <div class="header-badge-title">
           <span class="live-indicator"><span class="live-dot"></span>LIVE DATA</span>
+          <span class="mode-badge" style="background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Upcoming Only</span>
           <h2>Hackathon Finder</h2>
         </div>
         <div class="hackathon-meta">
@@ -505,7 +524,7 @@
           <button class="primary" id="hackathon-refresh-btn"><span class="refresh-spinner" id="hackathon-refresh-spinner" style="display:none;">(refresh)</span> Refresh</button>
         </div>
       </div>
-      <div class="hackathon-sub">Discover worldwide and virtual hackathons matched directly to your verified skills, projects, and credentials.</div>
+      <div class="hackathon-sub">Discover verified upcoming and active hackathons matched directly to your verified skills, projects, and credentials. Completed events are automatically filtered out.</div>
     </div>
 
     <!-- Featured Best Match Hero Card -->
