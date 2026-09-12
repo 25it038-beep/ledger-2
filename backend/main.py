@@ -97,6 +97,16 @@ def _seed_file(filepath: str, original_filename: str, db: Session, user_id: Opti
 
 @app.on_event("startup")
 def startup_init():
+    # Pre-warm Clerk JWKS in the background so the first token verification is instantaneous
+    import threading
+    def _prewarm_clerk():
+        try:
+            if auth.is_configured():
+                auth._jwks()
+        except Exception:
+            pass
+    threading.Thread(target=_prewarm_clerk, daemon=True).start()
+
     db = next(get_db())
     try:
         # 1. Ensure demo user exists

@@ -12,9 +12,36 @@
 
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script async crossorigin="anonymous" id="clerk-script" data-clerk-publishable-key="pk_test_c2hhcmluZy1yYWNlci01NzE1LmNsZXJrLmFjY291bnRzLmRldiQ" src="https://sharing-racer-5715.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"></script>
+
+<!-- High-Speed Preconnections & Preload for Clerk Authentication -->
+<link rel="preconnect" href="https://sharing-racer-5715.clerk.accounts.dev" crossorigin />
+<link rel="dns-prefetch" href="https://sharing-racer-5715.clerk.accounts.dev" />
+<link rel="preconnect" href="https://clerk.accounts.dev" crossorigin />
+<link rel="dns-prefetch" href="https://clerk.accounts.dev" />
+<link rel="preconnect" href="https://img.clerk.com" crossorigin />
+<link rel="dns-prefetch" href="https://img.clerk.com" />
+<link rel="preload" as="script" href="https://sharing-racer-5715.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js" crossorigin="anonymous" />
+
+<!-- Early Clerk Bootstrapper: runs in parallel with HTML streaming -->
+<script>
+  window.CLERK_PUBLISHABLE_KEY = "pk_test_c2hhcmluZy1yYWNlci01NzE1LmNsZXJrLmFjY291bnRzLmRldiQ";
+  function __earlyClerkBoot() {
+    try {
+      if (window.Clerk && !window.Clerk.loaded && !window._clerkBootStarted) {
+        window._clerkBootStarted = true;
+        window._clerkLoadPromise = window.Clerk.load({
+          publishableKey: window.CLERK_PUBLISHABLE_KEY
+        }).catch(function(e) { console.warn("Clerk early boot notice:", e); });
+      }
+    } catch(err) {}
+  }
+</script>
+<script async crossorigin="anonymous" id="clerk-script" 
+  data-clerk-publishable-key="pk_test_c2hhcmluZy1yYWNlci01NzE1LmNsZXJrLmFjY291bnRzLmRldiQ" 
+  src="https://sharing-racer-5715.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+  onload="__earlyClerkBoot()">
+</script>
 </head>
 <body>
 <div id="toast-container" class="toast-container"></div>
@@ -37,9 +64,23 @@
 
     <!-- Primary Authentication: Clerk Container -->
     <div id="clerk-sign-in" style="min-height:280px; width:100%;">
-      <div id="clerk-loading-indicator" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:40px 10px; color:var(--text-secondary); text-align:center;">
-        <div style="width:26px; height:26px; border:2.5px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
-        <div style="font-size:12.5px; font-family:var(--font-sans); color:var(--text-secondary);">Connecting to Clerk authentication...</div>
+      <div id="clerk-loading-indicator" style="display:flex; flex-direction:column; gap:12px; padding:16px 4px; width:100%;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="skeleton-line" style="width:130px; height:18px;"></div>
+          <div class="skeleton-line" style="width:55px; height:14px;"></div>
+        </div>
+        <div class="skeleton-line" style="width:100%; height:40px; border-radius:8px;"></div>
+        <div style="display:flex; align-items:center; gap:8px; margin:2px 0;">
+          <div style="flex:1; height:1px; background:rgba(255,255,255,0.08);"></div>
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">or</div>
+          <div style="flex:1; height:1px; background:rgba(255,255,255,0.08);"></div>
+        </div>
+        <div class="skeleton-line" style="width:100%; height:38px; border-radius:8px;"></div>
+        <div class="skeleton-line" style="width:100%; height:42px; border-radius:8px; background:linear-gradient(90deg, #342813 25%, #4a3a1b 50%, #342813 75%);"></div>
+        <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:4px;">
+          <div style="width:13px; height:13px; border:2px solid var(--accent); border-top-color:transparent; border-radius:50%; animation:spin 0.7s linear infinite;"></div>
+          <div style="font-size:11.5px; color:var(--text-muted); font-family:var(--font-mono);">Connecting securely to Clerk...</div>
+        </div>
       </div>
     </div>
     <div id="auth-setup-hint" class="auth-setup-hint" style="display:none;">

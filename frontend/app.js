@@ -283,6 +283,10 @@ async function loadSampleStarterData(btn) {
 }
 window.loadSampleStarterData = loadSampleStarterData;
 
+function isDemoSession() {
+  return !!(sessionStorage.getItem(DEMO_TOKEN_KEY) || localStorage.getItem(DEMO_TOKEN_KEY));
+}
+
 function showCachedUserBadge() {
   let isDemo = isDemoSession();
   const cached = getCachedUser();
@@ -434,10 +438,24 @@ function showAuthGate() {
   if (shell) shell.style.display = "none";
 }
 
+let currentAuthMountedMode = null;
+let clerkBootstrapPromise = null;
+
 function mountClerkAuth(mode = "signIn") {
-  if (!clerk) return;
+  if (!clerk) {
+    if (clerkBootstrapPromise) {
+      clerkBootstrapPromise.then(c => {
+        if (c) mountClerkAuth(mode);
+      });
+    }
+    return;
+  }
   const el = document.getElementById("clerk-sign-in");
   if (!el) return;
+  if (currentAuthMountedMode === mode && el.children.length > 0 && !document.getElementById("clerk-loading-indicator")) {
+    return;
+  }
+  currentAuthMountedMode = mode;
   el.innerHTML = "";
   currentAuthMode = mode;
 
@@ -616,24 +634,12 @@ async function initAuth() {
   showAuthGate();
   showCachedUserBadge();
 
-  let config;
-  try {
-    config = await fetch(`${API}/auth/config`).then(r => r.json());
-  } catch {
-    // Server unreachable — keep auth gate visible
-    showAuthGate();
-    return;
-  }
+  // Fast-track: acquire publishable key synchronously without blocking on network round-trips!
+  const defaultPubKey = window.CLERK_PUBLISHABLE_KEY || 
+    document.getElementById("clerk-script")?.getAttribute("data-clerk-publishable-key") || 
+    "pk_test_c2hhcmluZy1yYWNlci01NzE1LmNsZXJrLmFjY291bnRzLmRldiQ";
 
-  if (!config.authRequired || !config.publishableKey) {
-    const hint = document.getElementById("auth-setup-hint");
-    if (hint) hint.style.display = "block";
-    showApp();
-    initApp();
-    return;
-  }
-
-  const loadClerkScript = () => {
+  const loadClerkScript = (pubKey) => {
     return new Promise((resolve, reject) => {
       if (window.Clerk) return resolve(window.Clerk);
       let script = document.getElementById("clerk-script");
@@ -643,19 +649,19 @@ async function initAuth() {
         script.crossOrigin = "anonymous";
         document.head.appendChild(script);
       }
-      script.setAttribute("data-clerk-publishable-key", config.publishableKey);
+      if (pubKey) script.setAttribute("data-clerk-publishable-key", pubKey);
 
-      let attempts = 50;
+      let attempts = 180;
       const checkClerk = () => {
         if (window.Clerk) return resolve(window.Clerk);
         if (attempts-- <= 0) return reject(new Error("Clerk script load timeout"));
-        setTimeout(checkClerk, 100);
+        setTimeout(checkClerk, 20); // Check every 20ms instead of 100ms for instant pickup
       };
 
       if (!script.src) {
         let clerkHost = "";
         try {
-          const raw = config.publishableKey.split("_")[2] || "";
+          const raw = (pubKey || "").split("_")[2] || "";
           const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
           clerkHost = atob(padded).replace(/\$$/, "");
         } catch {}
@@ -668,7 +674,7 @@ async function initAuth() {
         script.onerror = () => {
           const fallback = document.createElement("script");
           fallback.crossOrigin = "anonymous";
-          fallback.setAttribute("data-clerk-publishable-key", config.publishableKey);
+          if (pubKey) fallback.setAttribute("data-clerk-publishable-key", pubKey);
           fallback.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
           fallback.onload = () => checkClerk();
           fallback.onerror = (e) => reject(e);
@@ -676,16 +682,49 @@ async function initAuth() {
         };
         script.src = primaryUrl;
       } else {
+        script.addEventListener("load", checkClerk, { once: true });
         checkClerk();
       }
     });
   };
 
-  try {
-    clerk = await loadClerkScript();
-    if (!clerk.loaded) {
-      await clerk.load({ publishableKey: config.publishableKey });
+  // 1. Kick off Clerk loading immediately in parallel with everything else!
+  clerkBootstrapPromise = (async () => {
+    try {
+      const c = await loadClerkScript(defaultPubKey);
+      if (!c.loaded) {
+        if (window._clerkLoadPromise) {
+          await window._clerkLoadPromise;
+        } else {
+          window._clerkLoadPromise = c.load({ publishableKey: defaultPubKey });
+          await window._clerkLoadPromise;
+        }
+      }
+      return c;
+    } catch (err) {
+      console.warn("Clerk bootstrap notice:", err);
+      return window.Clerk || null;
     }
+  })();
+
+  // 2. Fetch server auth config in background (does not block Clerk loading)
+  let config = { authRequired: true, publishableKey: defaultPubKey };
+  fetch(`${API}/auth/config`)
+    .then(r => r.json())
+    .then(data => {
+      if (data) {
+        config = data;
+        if (!config.authRequired || !config.publishableKey) {
+          const hint = document.getElementById("auth-setup-hint");
+          if (hint) hint.style.display = "block";
+        }
+      }
+    })
+    .catch(() => {});
+
+  try {
+    clerk = await clerkBootstrapPromise;
+    if (!clerk) throw new Error("Clerk instance not available");
   } catch (e) {
     console.warn("Clerk load notice:", e);
     const clerkSignIn = document.getElementById("clerk-sign-in");
@@ -713,27 +752,30 @@ async function initAuth() {
     const user = (payload && payload.user) || (clerk && clerk.user);
     const session = (payload && payload.session) || (clerk && clerk.session);
     if (user || session) {
+      // Instant switch into application
       showApp();
       initApp();
-      // Save/refresh the local login record on the server ("login info save").
-      try {
-        const uObj = user || session?.user;
-        const profilePayload = {
-          name: uObj?.fullName || [uObj?.firstName, uObj?.lastName].filter(Boolean).join(" ") || "",
-          email: uObj?.primaryEmailAddress?.emailAddress || "",
-          image_url: uObj?.imageUrl || "",
-        };
-        const res = await apiFetch(`${API}/auth/sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(profilePayload),
-        });
-        if (res.ok) {
-          const saved = await res.json();
-          setCachedUser(saved);
-          showCachedUserBadge();
-        }
-      } catch { /* non-fatal — user can still use the app */ }
+      // Sync user profile in background without blocking screen transition
+      (async () => {
+        try {
+          const uObj = user || session?.user;
+          const profilePayload = {
+            name: uObj?.fullName || [uObj?.firstName, uObj?.lastName].filter(Boolean).join(" ") || "",
+            email: uObj?.primaryEmailAddress?.emailAddress || "",
+            image_url: uObj?.imageUrl || "",
+          };
+          const res = await apiFetch(`${API}/auth/sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(profilePayload),
+          });
+          if (res.ok) {
+            const saved = await res.json();
+            setCachedUser(saved);
+            showCachedUserBadge();
+          }
+        } catch { /* non-fatal */ }
+      })();
     } else {
       const demoToken = sessionStorage.getItem(DEMO_TOKEN_KEY);
       if (!demoToken) {
