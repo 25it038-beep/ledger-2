@@ -113,21 +113,36 @@ function renderFloatingToast(message, type, title, icon) {
     document.body.appendChild(container);
   }
 
+  // Auto-dismiss older toasts so no more than 3 ever stack on screen
+  const activeToasts = container.querySelectorAll(".ledger-toast:not(.toast-hiding)");
+  if (activeToasts.length >= 3) {
+    for (let i = 0; i <= activeToasts.length - 3; i++) {
+      dismissToast(activeToasts[i]);
+    }
+  }
+
   const toast = document.createElement("div");
   toast.className = `ledger-toast toast-${type}`;
+  toast.setAttribute("role", "status");
   toast.innerHTML = `
     <div class="toast-icon-box">${icon}</div>
     <div class="toast-content">
       <div class="toast-title">${escapeHtml(title)}</div>
       <div class="toast-msg">${escapeHtml(message)}</div>
     </div>
-    <button type="button" class="toast-close" aria-label="Dismiss notification">✕</button>
+    <button type="button" class="toast-close" aria-label="Dismiss notification" title="Close notification">✕</button>
     <div class="toast-progress-bar"></div>
   `;
 
+  // Manual close button
   const closeBtn = toast.querySelector(".toast-close");
   closeBtn.onclick = (e) => {
     e.stopPropagation();
+    dismissToast(toast);
+  };
+
+  // Click anywhere on toast to dismiss immediately
+  toast.onclick = () => {
     dismissToast(toast);
   };
 
@@ -137,11 +152,40 @@ function renderFloatingToast(message, type, title, icon) {
     toast.classList.add("toast-visible");
   });
 
-  const timer = setTimeout(() => {
-    dismissToast(toast);
-  }, 4200);
+  // Automatic close timer with pause & resume on hover
+  const AUTO_CLOSE_MS = 2800;
+  let remainingMs = AUTO_CLOSE_MS;
+  let startTime = Date.now();
+  let timerId = null;
 
-  toast.addEventListener("mouseenter", () => clearTimeout(timer));
+  const startAutoClose = (ms) => {
+    startTime = Date.now();
+    timerId = setTimeout(() => {
+      dismissToast(toast);
+    }, ms);
+  };
+
+  startAutoClose(remainingMs);
+
+  const progressBar = toast.querySelector(".toast-progress-bar");
+
+  toast.addEventListener("mouseenter", () => {
+    if (timerId) clearTimeout(timerId);
+    timerId = null;
+    remainingMs -= (Date.now() - startTime);
+    if (remainingMs < 700) remainingMs = 700;
+    if (progressBar) progressBar.style.animationPlayState = "paused";
+  });
+
+  toast.addEventListener("mouseleave", () => {
+    if (progressBar) progressBar.style.animationPlayState = "running";
+    startAutoClose(remainingMs);
+  });
+
+  // Hard safety timeout: guaranteed auto-close after 5000ms max under all conditions
+  setTimeout(() => {
+    dismissToast(toast);
+  }, 5000);
 }
 
 function dismissToast(toast) {
@@ -234,6 +278,14 @@ function initNotificationCenter() {
   document.addEventListener("click", (e) => {
     if (nc && nc.style.display !== "none" && !nc.contains(e.target) && e.target !== toggleBtn && !toggleBtn?.contains(e.target)) {
       nc.style.display = "none";
+    }
+  });
+
+  // Automatically close on Escape key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (nc && nc.style.display !== "none") nc.style.display = "none";
+      document.querySelectorAll(".ledger-toast:not(.toast-hiding)").forEach(t => dismissToast(t));
     }
   });
 
@@ -846,6 +898,9 @@ document.getElementById("switch-to-clerk-btn")?.addEventListener("click", handle
 
 // ---------------------------------------------------------------- Tabs & Sidebar Navigation
 function activateTab(tabName) {
+  const nc = document.getElementById("notification-center");
+  if (nc && nc.style.display !== "none") nc.style.display = "none";
+
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById(`tab-${tabName}`)?.classList.add("active");
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.remove("active"));

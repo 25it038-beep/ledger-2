@@ -2542,6 +2542,7 @@ body.light .skeleton::after { background: linear-gradient(100deg, transparent 20
   transform: translateX(120%);
   opacity: 0;
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin 0.2s ease;
+  cursor: pointer;
   overflow: hidden;
 }
 
@@ -2660,7 +2661,7 @@ body.light .skeleton::after { background: linear-gradient(100deg, transparent 20
   height: 3px;
   background: linear-gradient(90deg, #d2a24a, #e0b45c);
   width: 100%;
-  animation: toastProgress 4s linear forwards;
+  animation: toastProgress 2.8s linear forwards;
 }
 
 @keyframes toastProgress {
