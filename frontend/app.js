@@ -1617,7 +1617,28 @@ async function loadDashboardNews() {
 }
 
 // ---------------------------------------------------------------- Hackathon Finder System
+function isCompletedHackathon(h) {
+  if (!h) return true;
+  if (h.is_expired) return true;
+  if (typeof h.deadline_days_left === 'number' && h.deadline_days_left < 0) return true;
+  const currentYear = new Date().getFullYear();
+  const name = (h.name || '').toLowerCase();
+  const pastYears = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+  const hasPastYear = pastYears.some(y => name.includes(String(y)));
+  const hasCurrentOrFuture = [currentYear, currentYear + 1, currentYear + 2].some(y => name.includes(String(y)));
+  if (hasPastYear && !hasCurrentOrFuture) return true;
+
+  const pastKeywords = [
+    'winner', 'winning', 'concluded', 'concluding', 'conclusion',
+    'completed', 'wrapped up', 'grand finale', 'recap', 'retrospective',
+    'closed', 'ended', 'finished'
+  ];
+  if (pastKeywords.some(kw => name.includes(kw))) return true;
+  return false;
+}
+
 function renderHackathonCardHtml(h, isCompact = false) {
+  if (!h || isCompletedHackathon(h)) return '';
   const modeClass = (h.mode || 'online').toLowerCase();
   const matchScore = h.match_score || 50;
   const matchClass = matchScore >= 80 ? 'high' : '';
@@ -1769,9 +1790,9 @@ async function loadDashboardHackathons() {
   });
 
   try {
-    const res = await apiFetch(`${API}/hackathons/recommended?limit=3`);
+    const res = await apiFetch(`${API}/hackathons/recommended?limit=5`);
     const data = await res.json();
-    const items = data.hackathons || [];
+    const items = (data.hackathons || []).filter(h => !isCompletedHackathon(h)).slice(0, 3);
 
     if (!items.length) {
       container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">No upcoming hackathons available right now. Check back soon!</div>';
@@ -1897,10 +1918,11 @@ async function loadHackathons() {
   // Load Best Match Hero Card
   if (bestMatchContainer) {
     try {
-      const recRes = await apiFetch(`${API}/hackathons/recommended?limit=1`);
+      const recRes = await apiFetch(`${API}/hackathons/recommended?limit=5`);
       const recData = await recRes.json();
-      if (recData.hackathons && recData.hackathons.length > 0) {
-        bestMatchContainer.innerHTML = renderBestMatchHero(recData.hackathons[0]);
+      const validRecs = (recData.hackathons || []).filter(h => !isCompletedHackathon(h));
+      if (validRecs.length > 0) {
+        bestMatchContainer.innerHTML = renderBestMatchHero(validRecs[0]);
       } else {
         bestMatchContainer.innerHTML = '';
       }
@@ -1924,7 +1946,7 @@ async function loadHackathonsList() {
     <div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line sub"></div><div class="skeleton-line tag"></div></div>
     <div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line sub"></div><div class="skeleton-line tag"></div></div>
   `;
-  if (countEl) countEl.textContent = 'Searching hackathons...';
+  if (countEl) countEl.textContent = 'Searching upcoming hackathons...';
 
   try {
     const params = new URLSearchParams({
@@ -1938,7 +1960,7 @@ async function loadHackathonsList() {
 
     const res = await apiFetch(`${API}/hackathons?${params}`);
     const data = await res.json();
-    const items = data.hackathons || [];
+    const items = (data.hackathons || []).filter(h => !isCompletedHackathon(h));
 
     if (updatedEl && data.last_updated) {
       const dt = new Date(data.last_updated);
@@ -1950,7 +1972,7 @@ async function loadHackathonsList() {
     }
 
     if (!items.length) {
-      gridContainer.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">No hackathons match your filters.</div>';
+      gridContainer.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">No upcoming hackathons match your filters.</div>';
       return;
     }
 
@@ -1983,21 +2005,21 @@ async function executeLiveWebSearch(query) {
     <div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line sub"></div><div class="skeleton-line tag"></div></div>
     <div class="skeleton-card"><div class="skeleton-line title"></div><div class="skeleton-line sub"></div><div class="skeleton-line tag"></div></div>
   `;
-  if (countEl) countEl.textContent = 'Searching live web and Google global hackathon indexes...';
+  if (countEl) countEl.textContent = 'Searching live web for upcoming hackathons...';
 
   try {
-    const res = await apiFetch(`${API}/hackathons/web-search?q=${encodeURIComponent(query || 'AI Hackathon')}&limit=30`);
+    const res = await apiFetch(`${API}/hackathons/web-search?q=${encodeURIComponent(query || 'upcoming AI Hackathon 2026')}&limit=30`);
     const data = await res.json();
-    const items = data.hackathons || [];
+    const items = (data.hackathons || []).filter(h => !isCompletedHackathon(h));
 
     if (countEl) {
-      countEl.textContent = `Found ${items.length} live web announcement${items.length === 1 ? '' : 's'} across technology feeds`;
+      countEl.textContent = `Found ${items.length} upcoming web announcement${items.length === 1 ? '' : 's'}`;
     }
 
     if (!items.length) {
       gridContainer.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1;">
-          No live web hackathons found matching "${escapeHtml(query)}". Try another topic like "AI", "Quantum", "Cybersecurity", or "Cloud".
+          No upcoming live web hackathons found matching "${escapeHtml(query)}". Try another topic like "AI", "Quantum", "Cybersecurity", or "Cloud".
         </div>
       `;
       return;

@@ -35,6 +35,19 @@ def _clean_html(text: Optional[str]) -> str:
     return clean.strip()
 
 
+def _strip_emojis(text: Optional[str]) -> str:
+    if not text:
+        return ""
+    # Normalize unicode quotes, dashes and unprintable characters
+    clean = text.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+    clean = clean.replace("\u2013", "-").replace("\u2014", "-").replace("\ufffd", "")
+    # Strip high surrogate / astral symbols (emojis) and misc symbol blocks
+    clean = re.sub(r"[\U00010000-\U0010ffff]", "", clean)
+    clean = re.sub(r"[\u2600-\u27bf\u2b50\ufe0f\u200d]", "", clean)
+    return clean.strip()
+
+
+
 def _parse_date_safe(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str or not isinstance(date_str, str):
         return None
@@ -48,10 +61,17 @@ def _parse_date_safe(date_str: Optional[str]) -> Optional[datetime]:
         "%Y-%m-%d",
         "%b %d, %Y",
         "%d %b %Y",
+        "%b %d %Y",
+        "%B %d, %Y",
+        "%B %d %Y",
+        "%d %B %Y",
+        "%b %d",
     ]
     for fmt in formats:
         try:
             dt = datetime.strptime(date_str, fmt)
+            if fmt == "%b %d":
+                dt = dt.replace(year=datetime.now(timezone.utc).year)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt
@@ -66,6 +86,97 @@ def _parse_date_safe(date_str: Optional[str]) -> Optional[datetime]:
     except Exception:
         pass
     return None
+
+
+PAST_OR_COMPLETED_PATTERNS = [
+    r"\bwinner[s]?\b",
+    r"\bwinning\b",
+    r"\bwins?\b",
+    r"\bwon\b",
+    r"\bconclude[ds]?\b",
+    r"\bconcluding\b",
+    r"\bconclusion\b",
+    r"\bcompleted\b",
+    r"\bwrapped up\b",
+    r"\bwraps up\b",
+    r"\bwrap[- ]?up\b",
+    r"\bgrand finale\b",
+    r"\bchampionship\b",
+    r"\brecap\b",
+    r"\breliving\b",
+    r"\btakeaways\b",
+    r"\bretrospective\b",
+    r"\bhosted\b",
+    r"\bheld\b",
+    r"\bshowcase[ds]?\b",
+    r"\bstudents? (bring|brought|create|created|build|built|reimagine)\b",
+    r"\bexperience at\b",
+    r"\bpulls out of\b",
+    r"\binside cisco\b",
+    r"\bhighlights\b",
+    r"\baward[s]?\b",
+    r"\bawarded\b",
+    r"\brecognized with award\b",
+    r"\bclosed\b",
+    r"\bended\b",
+    r"\bpast\b",
+    r"\bfinished\b",
+    r"\bnamed for\b",
+    r"\bfrom a wild idea\b",
+    r"\bbuilding wise at\b",
+    r"\bproceedings\b",
+    r"\bback the hack\b",
+    r"^\d+\s+hackathons?\b",
+    r"^\d+\s+best hackathons?\b",
+    r"\btop\s+\d+\s+hackathons?\b",
+    r"\bhackathons you should attend\b",
+    r"\bhackathons to watch\b",
+    r"\blist of hackathons\b",
+]
+
+
+def is_completed_hackathon(h: Dict[str, Any]) -> bool:
+    """Strictly determines if a hackathon has completed, registration closed, or is a retrospective news item."""
+    if h.get("is_expired"):
+        return True
+
+    days = h.get("deadline_days_left")
+    if days is not None and days < 0:
+        return True
+
+    now_utc = datetime.now(timezone.utc)
+
+    # Check end_date
+    end_raw = h.get("end_date")
+    if end_raw and end_raw != "Not specified":
+        dt = _parse_date_safe(end_raw)
+        if dt and dt < now_utc:
+            return True
+
+    # Check deadline_raw
+    dead_raw = h.get("deadline_raw")
+    if dead_raw and dead_raw != "Not specified":
+        dt = _parse_date_safe(dead_raw)
+        if dt and dt < now_utc:
+            return True
+
+    # Check textual past or completion indicators in name or description
+    text = f"{h.get('name', '')} {h.get('description', '')} {h.get('deadline_display', '')} {h.get('time_left_str', '')}".lower()
+    for pat in PAST_OR_COMPLETED_PATTERNS:
+        if re.search(pat, text):
+            return True
+
+    # Check for explicitly past years in name (e.g. 2024, 2025) when no current/future year is present
+    current_year = datetime.now(timezone.utc).year
+    name_lower = str(h.get("name", "")).lower()
+    past_years = [str(y) for y in range(2015, current_year)]
+    future_or_current_years = [str(y) for y in range(current_year, current_year + 5)]
+    has_past_year = any(re.search(rf"\b{py}\b", name_lower) for py in past_years)
+    has_current_or_future = any(re.search(rf"\b{cy}\b", name_lower) for cy in future_or_current_years)
+    if has_past_year and not has_current_or_future:
+        return True
+
+    return False
 
 
 class HackathonProvider(abc.ABC):
@@ -91,10 +202,22 @@ class DevpostApiProvider(HackathonProvider):
                 return results
             data = resp.json()
             items = data.get("hackathons", [])
+            now_utc = datetime.now(timezone.utc)
             for item in items:
                 title = item.get("title", "").strip()
                 url = item.get("url", "").strip()
                 if not title or not url:
+                    continue
+
+                # Exclude completed or ended hackathons immediately
+                open_state = str(item.get("open_state", "")).lower()
+                winners_announced = bool(item.get("winners_announced", False))
+                time_left_raw = str(item.get("time_left_to_submission", "")).strip()
+                time_left_lower = time_left_raw.lower()
+
+                if open_state in ["ended", "closed", "past"] or winners_announced:
+                    continue
+                if any(kw in time_left_lower for kw in ["ended", "closed", "past", "winner"]):
                     continue
 
                 # Prize extraction
@@ -128,7 +251,7 @@ class DevpostApiProvider(HackathonProvider):
 
                 # Dates
                 sub_dates = item.get("submission_period_dates", "")
-                time_left = item.get("time_left_to_submission", "")
+                time_left = time_left_raw
 
                 reg_deadline = None
                 start_date = None
@@ -140,6 +263,16 @@ class DevpostApiProvider(HackathonProvider):
                     reg_deadline = end_str
                     start_date = start_str
                     end_date = end_str
+
+                # Exclude if parsed deadline or end_date is in the past
+                if end_date:
+                    end_dt = _parse_date_safe(end_date)
+                    if end_dt and end_dt < now_utc:
+                        continue
+                if reg_deadline:
+                    reg_dt = _parse_date_safe(reg_deadline)
+                    if reg_dt and reg_dt < now_utc:
+                        continue
 
                 organizer = item.get("organization_name") or "Devpost Community"
 
@@ -193,10 +326,17 @@ class DevfolioApiProvider(HackathonProvider):
                 official_url = f"https://{slug}.devfolio.co"
                 starts_at = item.get("starts_at")
                 ends_at = item.get("ends_at")
+                setting = item.get("hackathon_setting") or {}
+                reg_ends_at = setting.get("reg_ends_at")
 
-                # Filter out clearly past hackathons
+                # Filter out clearly past / completed hackathons
+                now_utc = datetime.now(timezone.utc)
                 end_dt = _parse_date_safe(ends_at)
-                if end_dt and end_dt < datetime.now(timezone.utc):
+                if end_dt and end_dt < now_utc:
+                    continue
+
+                reg_dt = _parse_date_safe(reg_ends_at)
+                if reg_dt and reg_dt < now_utc:
                     continue
 
                 is_online = item.get("is_online", False)
@@ -235,6 +375,7 @@ class DevfolioApiProvider(HackathonProvider):
 
                 start_formatted = _format_iso_date(starts_at)
                 end_formatted = _format_iso_date(ends_at)
+                reg_deadline_formatted = _format_iso_date(reg_ends_at) or start_formatted or "Not specified"
 
                 results.append({
                     "id": f"devfolio_{item.get('uuid', slug)}",
@@ -245,8 +386,8 @@ class DevfolioApiProvider(HackathonProvider):
                     "official_url": official_url,
                     "start_date": start_formatted or "Not specified",
                     "end_date": end_formatted or "Not specified",
-                    "registration_deadline": start_formatted or "Not specified",
-                    "deadline_raw": starts_at or ends_at or "",
+                    "registration_deadline": reg_deadline_formatted,
+                    "deadline_raw": reg_ends_at or starts_at or ends_at or "",
                     "time_left_str": "",
                     "location": location or "Not specified",
                     "country": country or "Not specified",
@@ -288,6 +429,13 @@ class UnstopApiProvider(HackathonProvider):
                 if not reg_open:
                     continue
 
+                end_date_iso = item.get("end_date")
+                start_date_iso = item.get("start_date")
+                now_utc = datetime.now(timezone.utc)
+                end_dt = _parse_date_safe(end_date_iso)
+                if end_dt and end_dt < now_utc:
+                    continue
+
                 # Organizer
                 org_obj = item.get("organisation")
                 if isinstance(org_obj, dict):
@@ -324,8 +472,6 @@ class UnstopApiProvider(HackathonProvider):
                             prize_str = f"{symbol}{cash:,}" if isinstance(cash, (int, float)) else f"{symbol}{cash}"
 
                 # Dates & Deadlines
-                end_date_iso = item.get("end_date")
-                start_date_iso = item.get("start_date")
                 reqs = item.get("regnRequirements") or {}
                 remain_days = reqs.get("remain_days") or ""
 
@@ -379,14 +525,17 @@ class UnstopApiProvider(HackathonProvider):
 class WebSearchHackathonProvider(HackathonProvider):
     """Fetches real hackathon announcements and events across the live web via Google RSS."""
 
-    def __init__(self, default_query: str = "hackathon 2026"):
+    def __init__(self, default_query: str = "upcoming hackathons 2026"):
         self.default_query = default_query
 
     def fetch_hackathons(self, query: Optional[str] = None) -> List[Dict[str, Any]]:
         import xml.etree.ElementTree as ET
         import urllib.parse
         q = query or self.default_query
-        encoded_q = urllib.parse.quote_plus(f"{q} hackathon 2026")
+        if not query:
+            encoded_q = urllib.parse.quote_plus("upcoming hackathon 2026 registrations open apply")
+        else:
+            encoded_q = urllib.parse.quote_plus(f"{q} upcoming hackathon 2026")
         url = f"https://news.google.com/rss/search?q={encoded_q}&hl=en-US&gl=US&ceid=US:en"
 
         results = []
@@ -405,22 +554,27 @@ class WebSearchHackathonProvider(HackathonProvider):
                 source_elem = it.find("source")
                 source_name = source_elem.text if source_elem is not None else "Web Announcement"
 
-                if not raw_title or not link:
+                clean_title = _strip_emojis(raw_title)
+                if not clean_title:
                     continue
 
-                title_lower = raw_title.lower()
+                title_lower = clean_title.lower()
                 # Ensure it is genuinely a hackathon
                 if "hackathon" not in title_lower and "hack" not in title_lower:
                     continue
 
+                # Strictly filter out completed, retrospective, and winner announcements
+                if any(re.search(pat, title_lower) for pat in PAST_OR_COMPLETED_PATTERNS):
+                    continue
+
                 # Clean title: "Event Name - Publisher"
-                if " - " in raw_title:
-                    parts = raw_title.rsplit(" - ", 1)
-                    name = parts[0].strip()
-                    organizer = parts[1].strip() or source_name
+                if " - " in clean_title:
+                    parts = clean_title.rsplit(" - ", 1)
+                    name = _strip_emojis(parts[0].strip())
+                    organizer = _strip_emojis(parts[1].strip() or source_name)
                 else:
-                    name = raw_title.strip()
-                    organizer = source_name
+                    name = clean_title.strip()
+                    organizer = _strip_emojis(source_name)
 
                 if name.lower() in seen:
                     continue
@@ -476,18 +630,22 @@ def _format_iso_date(iso_str: Optional[str]) -> Optional[str]:
 
 def _calculate_deadline_intel(hackathon: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate remaining days and friendly deadline label."""
+    now = datetime.now(timezone.utc)
     raw = hackathon.get("deadline_raw")
     dt = _parse_date_safe(raw)
-    now = datetime.now(timezone.utc)
-    if dt:
-        diff = dt - now
+    end_raw = hackathon.get("end_date")
+    end_dt = _parse_date_safe(end_raw) if end_raw and end_raw != "Not specified" else None
+
+    target_dt = dt or end_dt
+    if target_dt:
+        diff = target_dt - now
         days = diff.days
-        if days < 0:
+        if diff.total_seconds() < 0:
             hackathon["is_expired"] = True
-            hackathon["deadline_display"] = f"Ended on {dt.strftime('%d %b %Y')}"
+            hackathon["deadline_display"] = f"Ended on {target_dt.strftime('%d %b %Y')}"
             hackathon["deadline_days_left"] = days
         elif days == 0:
-            hours = int(diff.seconds / 3600)
+            hours = max(1, int(diff.seconds / 3600))
             hackathon["is_expired"] = False
             hackathon["deadline_display"] = f"Closes today in {hours}h"
             hackathon["deadline_days_left"] = 0
@@ -501,15 +659,21 @@ def _calculate_deadline_intel(hackathon: Dict[str, Any]) -> Dict[str, Any]:
             hackathon["deadline_days_left"] = days
     else:
         time_left = hackathon.get("time_left_str") or ""
-        reg = hackathon.get("registration_deadline") or "Not specified"
-        hackathon["is_expired"] = False
-        hackathon["deadline_days_left"] = 999
-        if time_left:
-            hackathon["deadline_display"] = f"Closes in {time_left}" if not time_left.startswith("Closes") else time_left
-        elif reg != "Not specified":
-            hackathon["deadline_display"] = f"Deadline: {reg}"
+        time_left_lower = time_left.lower()
+        if any(term in time_left_lower for term in ["ended", "closed", "past", "concluded", "winner"]):
+            hackathon["is_expired"] = True
+            hackathon["deadline_display"] = "Event concluded"
+            hackathon["deadline_days_left"] = -1
         else:
-            hackathon["deadline_display"] = "Deadline: Not specified"
+            reg = hackathon.get("registration_deadline") or "Not specified"
+            hackathon["is_expired"] = False
+            hackathon["deadline_days_left"] = 999
+            if time_left:
+                hackathon["deadline_display"] = f"Closes in {time_left}" if not time_left.startswith("Closes") else time_left
+            elif reg != "Not specified":
+                hackathon["deadline_display"] = f"Deadline: {reg}"
+            else:
+                hackathon["deadline_display"] = "Registration open"
     return hackathon
 
 
@@ -524,7 +688,7 @@ PROVIDERS: List[HackathonProvider] = [
 
 
 def fetch_all_hackathons(force_refresh: bool = False) -> List[Dict[str, Any]]:
-    """Fetch from all providers with caching and deduplication."""
+    """Fetch from all providers with caching and deduplication, returning ONLY upcoming hackathons."""
     now = time.time()
     if not force_refresh and (now - _CACHE["timestamp"] < _CACHE["ttl"]) and _CACHE["hackathons"]:
         return _CACHE["hackathons"]
@@ -549,10 +713,13 @@ def fetch_all_hackathons(force_refresh: bool = False) -> List[Dict[str, Any]]:
         seen_urls.add(url_key)
         seen_names.add(name_key)
         _calculate_deadline_intel(h)
+        for field in ["name", "organizer", "description", "prize", "location", "country", "region", "registration_deadline", "deadline_display", "time_left_str"]:
+            if field in h and isinstance(h[field], str):
+                h[field] = _strip_emojis(h[field])
         deduped.append(h)
 
-    # Filter out expired events
-    active_events = [h for h in deduped if not h.get("is_expired", False)]
+    # Strictly filter out completed, expired, or retrospective events
+    active_events = [h for h in deduped if not is_completed_hackathon(h)]
 
     _CACHE["hackathons"] = active_events
     _CACHE["timestamp"] = now
@@ -720,12 +887,14 @@ def calculate_match(hackathon: Dict[str, Any], user_ctx: Dict[str, Any]) -> Dict
 
 
 def get_recommended_hackathons(db: Session, limit: int = 5, user_id: int | None = None) -> List[Dict[str, Any]]:
-    """Return top recommended hackathons for the user ordered by match score."""
-    hackathons = fetch_all_hackathons()
+    """Return top recommended hackathons for the user ordered by match score (upcoming only)."""
+    hackathons = [h for h in fetch_all_hackathons() if not is_completed_hackathon(h)]
     user_ctx = get_user_identity_context(db, user_id=user_id)
 
     ranked = []
     for h in hackathons:
+        if is_completed_hackathon(h):
+            continue
         h_copy = dict(h)
         match_info = calculate_match(h, user_ctx)
         h_copy.update(match_info)
@@ -747,12 +916,15 @@ def search_hackathons(
     limit: int = 50,
     user_id: int | None = None,
 ) -> List[Dict[str, Any]]:
-    """Filter, match, and sort hackathons for the global explorer."""
-    hackathons = fetch_all_hackathons()
+    """Filter, match, and sort hackathons for the global explorer (upcoming only)."""
+    hackathons = [h for h in fetch_all_hackathons() if not is_completed_hackathon(h)]
     user_ctx = get_user_identity_context(db, user_id=user_id)
 
     results = []
     for h in hackathons:
+        if is_completed_hackathon(h):
+            continue
+
         # Filter mode
         if mode and mode.lower() != "all":
             if h.get("mode", "").lower() != mode.lower():
@@ -813,7 +985,7 @@ def search_hackathons(
 
 
 def web_search_hackathons_live(db: Session, query: str = "", limit: int = 30, user_id: int | None = None) -> List[Dict[str, Any]]:
-    """Perform on-demand live web search for hackathons matching any custom query."""
+    """Perform on-demand live web search for hackathons matching any custom query, filtering out completed events."""
     provider = WebSearchHackathonProvider(default_query=query or "AI technology")
     raw_results = provider.fetch_hackathons(query=query)
 
@@ -821,6 +993,11 @@ def web_search_hackathons_live(db: Session, query: str = "", limit: int = 30, us
     scored_results = []
     for h in raw_results:
         _calculate_deadline_intel(h)
+        if is_completed_hackathon(h):
+            continue
+        for field in ["name", "organizer", "description", "prize", "location", "country", "region", "registration_deadline", "deadline_display", "time_left_str"]:
+            if field in h and isinstance(h[field], str):
+                h[field] = _strip_emojis(h[field])
         match_info = calculate_match(h, user_ctx)
         h.update(match_info)
         scored_results.append(h)

@@ -1190,5 +1190,13 @@ for _d in _possible_frontend_dirs:
         break
 
 if FRONTEND_DIR:
+    @app.get("/favicon.ico")
+    def favicon_endpoint():
+        for fname in ["favicon.png", "logo.png"]:
+            fpath = os.path.join(FRONTEND_DIR, fname)
+            if os.path.exists(fpath):
+                return FileResponse(fpath, media_type="image/png")
+        return Response(status_code=204)
+
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 

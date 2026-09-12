@@ -6,7 +6,9 @@
 <meta name="description" content="Ledger — AI-Powered Digital Identity Intelligence Platform" />
 <meta name="theme-color" content="#0B0E13" />
 <title>Ledger — Digital Identity Intelligence</title>
-<link rel="stylesheet" href="style.css?v=2026_clerk_contrast_v1" />
+<link rel="icon" type="image/png" href="logo.png" />
+<link rel="apple-touch-icon" href="logo.png" />
+<link rel="stylesheet" href="style.css?v=2026_logo_v1" />
 
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +22,9 @@
 <!-- Auth gate: shown by default until session is verified -->
 <div id="auth-gate" class="auth-gate">
   <div class="auth-card" style="max-width:440px; width:100%; padding:32px 28px;">
+    <div style="display:flex; justify-content:center; margin-bottom:16px;">
+      <img src="logo.png" alt="Digital Identity Logo" style="width:76px; height:76px; border-radius:18px; object-fit:cover; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1.5px rgba(210, 162, 74, 0.45);" />
+    </div>
     <h1 class="masthead-title" style="font-size:26px; margin:0 0 6px;">Ledger <span class="accent">of Record</span></h1>
     <div class="masthead-sub" style="margin-bottom:20px; font-size:13px; color:var(--text-secondary);">AI-Powered Digital Identity Platform</div>
 
@@ -56,7 +61,7 @@
 <div class="app-shell" id="app-shell" style="display:none;">
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="logo">L</div>
+      <img src="logo.png" alt="Ledger Logo" class="logo" />
       <div>
         <div class="brand-name">Ledger</div>
         <div class="brand-sub">AI Identity</div>
@@ -148,9 +153,12 @@
     </header>
 
   <header class="masthead">
-    <div>
-      <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
-      <div class="masthead-sub">AI Digital Identity System — one archive, every credential connected</div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <img src="logo.png" alt="Digital Identity Logo" style="width:48px; height:48px; border-radius:12px; object-fit:cover; border:1.5px solid rgba(210, 162, 74, 0.4); box-shadow:0 4px 14px rgba(0,0,0,0.35); flex-shrink:0;" />
+      <div>
+        <h1 class="masthead-title">Ledger <span class="accent">of Record</span></h1>
+        <div class="masthead-sub">AI Digital Identity System — one archive, every credential connected</div>
+      </div>
     </div>
     <div class="header-right">
       <div class="record-count"><b id="doc-total">0</b>documents on file</div>
