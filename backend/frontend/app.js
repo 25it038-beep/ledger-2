@@ -122,21 +122,25 @@ function showCachedUserBadge() {
   if (sidebarSignoutBtn) sidebarSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign Out";
   if (headerSignoutBtn) headerSignoutBtn.textContent = isDemo ? "Exit Demo" : "Sign Out";
 
-  // Mount Clerk UserButton if active Clerk user and not demo
-  const topbarUserBtn = document.getElementById("clerk-user-button-topbar");
-  const sidebarUserBtn = document.getElementById("clerk-user-button-sidebar");
-  if (!isDemo && clerk && clerk.user && typeof clerk.mountUserButton === "function") {
-    if (topbarUserBtn && !topbarUserBtn.children.length) {
-      topbarUserBtn.style.display = "inline-block";
-      try { clerk.mountUserButton(topbarUserBtn); } catch (e) { console.warn("mountUserButton topbar:", e); }
+  // Single unified profile avatar: click to open Clerk user profile modal if authenticated
+  const handleAvatarClick = () => {
+    if (!isDemo && clerk && typeof clerk.openUserProfile === "function") {
+      try {
+        clerk.openUserProfile();
+      } catch (e) {
+        console.warn("openUserProfile:", e);
+      }
     }
-    if (sidebarUserBtn && !sidebarUserBtn.children.length) {
-      sidebarUserBtn.style.display = "inline-block";
-      try { clerk.mountUserButton(sidebarUserBtn); } catch (e) { console.warn("mountUserButton sidebar:", e); }
-    }
-  } else {
-    if (topbarUserBtn) topbarUserBtn.style.display = "none";
-    if (sidebarUserBtn) sidebarUserBtn.style.display = "none";
+  };
+  if (topbarAvatar) {
+    topbarAvatar.style.cursor = (!isDemo && clerk && clerk.user) ? "pointer" : "default";
+    topbarAvatar.title = (!isDemo && clerk && clerk.user) ? "Manage Clerk Profile" : "";
+    topbarAvatar.onclick = handleAvatarClick;
+  }
+  if (sidebarAvatar) {
+    sidebarAvatar.style.cursor = (!isDemo && clerk && clerk.user) ? "pointer" : "default";
+    sidebarAvatar.title = (!isDemo && clerk && clerk.user) ? "Manage Clerk Profile" : "";
+    sidebarAvatar.onclick = handleAvatarClick;
   }
 }
 
