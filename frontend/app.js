@@ -227,24 +227,28 @@ function mountClerkAuth(mode = "signIn") {
   el.innerHTML = "";
   currentAuthMode = mode;
 
-  // Highlight active tab
+  // Highlight active tab with crystal clear contrast
   const signInTab = document.getElementById("auth-mode-signin");
   const signUpTab = document.getElementById("auth-mode-signup");
   if (signInTab && signUpTab) {
     if (mode === "signIn") {
-      signInTab.style.background = "rgba(210,162,74,0.18)";
-      signInTab.style.borderColor = "rgba(210,162,74,0.45)";
-      signInTab.style.color = "var(--accent-strong)";
-      signUpTab.style.background = "rgba(255,255,255,0.04)";
-      signUpTab.style.borderColor = "rgba(255,255,255,0.12)";
-      signUpTab.style.color = "var(--text-secondary)";
+      signInTab.style.background = "rgba(210,162,74,0.22)";
+      signInTab.style.borderColor = "#d2a24a";
+      signInTab.style.color = "#ffffff";
+      signInTab.style.fontWeight = "700";
+      signUpTab.style.background = "rgba(255,255,255,0.05)";
+      signUpTab.style.borderColor = "rgba(255,255,255,0.18)";
+      signUpTab.style.color = "#cbd5e1";
+      signUpTab.style.fontWeight = "600";
     } else {
-      signUpTab.style.background = "rgba(210,162,74,0.18)";
-      signUpTab.style.borderColor = "rgba(210,162,74,0.45)";
-      signUpTab.style.color = "var(--accent-strong)";
-      signInTab.style.background = "rgba(255,255,255,0.04)";
-      signInTab.style.borderColor = "rgba(255,255,255,0.12)";
-      signInTab.style.color = "var(--text-secondary)";
+      signUpTab.style.background = "rgba(210,162,74,0.22)";
+      signUpTab.style.borderColor = "#d2a24a";
+      signUpTab.style.color = "#ffffff";
+      signUpTab.style.fontWeight = "700";
+      signInTab.style.background = "rgba(255,255,255,0.05)";
+      signInTab.style.borderColor = "rgba(255,255,255,0.18)";
+      signInTab.style.color = "#cbd5e1";
+      signInTab.style.fontWeight = "600";
     }
   }
 
@@ -252,22 +256,79 @@ function mountClerkAuth(mode = "signIn") {
     variables: {
       colorPrimary: "#d2a24a",
       colorBackground: "#131a23",
-      colorText: "#f0f2f5",
-      colorInputBackground: "#0b0e13",
-      colorInputText: "#f0f2f5",
-      borderRadius: "6px",
+      colorText: "#ffffff",
+      colorTextSecondary: "#94a3b8",
+      colorTextOnPrimaryBackground: "#0b0e13",
+      colorInputBackground: "#0b0f16",
+      colorInputText: "#ffffff",
+      colorNeutral: "#ffffff",
+      borderRadius: "8px",
     },
     elements: {
       card: {
         boxShadow: "none",
         background: "transparent",
         border: "none",
-        padding: "0"
+        padding: "0",
       },
       rootBox: {
-        width: "100%"
-      }
-    }
+        width: "100%",
+      },
+      headerTitle: {
+        color: "#ffffff",
+        fontWeight: "700",
+        fontSize: "20px",
+      },
+      headerSubtitle: {
+        color: "#94a3b8",
+        fontSize: "13px",
+      },
+      formFieldLabel: {
+        color: "#e2e8f0",
+        fontWeight: "600",
+        fontSize: "13px",
+        marginBottom: "6px",
+      },
+      formFieldInput: {
+        backgroundColor: "#0b0f16",
+        color: "#ffffff",
+        borderColor: "rgba(210, 162, 74, 0.45)",
+        borderWidth: "1.5px",
+        borderStyle: "solid",
+        borderRadius: "8px",
+        fontSize: "14px",
+      },
+      socialButtonsBlockButton: {
+        backgroundColor: "rgba(255, 255, 255, 0.05)",
+        borderColor: "rgba(255, 255, 255, 0.18)",
+        color: "#ffffff",
+        borderRadius: "8px",
+      },
+      socialButtonsBlockButtonText: {
+        color: "#f8fafc",
+        fontWeight: "600",
+      },
+      dividerText: {
+        color: "#94a3b8",
+        fontWeight: "600",
+      },
+      dividerLine: {
+        backgroundColor: "rgba(255, 255, 255, 0.16)",
+      },
+      formButtonPrimary: {
+        backgroundColor: "#d2a24a",
+        color: "#0b0e13",
+        fontWeight: "700",
+        borderRadius: "8px",
+      },
+      footerActionText: {
+        color: "#94a3b8",
+      },
+      footerActionLink: {
+        color: "#d2a24a",
+        fontWeight: "600",
+      },
+    },
   };
 
   try {
